@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: HydroHeat AI API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: cities
+    description: City and climate data
+  - name: simulation
+    description: Simulation and interventions
 paths:
   /healthz:
     get:
@@ -24,6 +27,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /cities:
+    get:
+      operationId: getCities
+      tags: [cities]
+      summary: Get all cities
+      description: Returns list of Indian cities with climate data
+      responses:
+        "200":
+          description: List of cities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/City"
+  /cities/{cityId}:
+    get:
+      operationId: getCityById
+      tags: [cities]
+      summary: Get city by ID
+      parameters:
+        - name: cityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: City details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/City"
+  /simulation/calculate:
+    post:
+      operationId: calculateSimulation
+      tags: [simulation]
+      summary: Calculate simulation with interventions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationRequest"
+      responses:
+        "200":
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+  /weather/{lat}/{lng}:
+    get:
+      operationId: getWeather
+      tags: [cities]
+      summary: Get local weather for coordinates
+      parameters:
+        - name: lat
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Local weather data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherData"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +110,171 @@ components:
           type: string
       required:
         - status
-
+    City:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        state:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        temperature:
+          type: number
+          description: Current temperature in Celsius
+        groundwater:
+          type: number
+          description: Groundwater level percentage (0-100)
+        riskScore:
+          type: number
+          description: Risk score (0-100)
+        population:
+          type: number
+        heatIslandIntensity:
+          type: number
+          description: Urban heat island intensity in degrees C above surroundings
+        airQualityIndex:
+          type: number
+        humidity:
+          type: number
+        rainfall:
+          type: number
+          description: Annual rainfall in mm
+      required:
+        - id
+        - name
+        - state
+        - lat
+        - lng
+        - temperature
+        - groundwater
+        - riskScore
+        - population
+        - heatIslandIntensity
+        - airQualityIndex
+        - humidity
+        - rainfall
+    Intervention:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [tree, fountain, solar, green_roof, permeable_pavement, factory, stubble_burning, fireworks]
+        lat:
+          type: number
+        lng:
+          type: number
+        count:
+          type: integer
+          default: 1
+      required:
+        - type
+        - lat
+        - lng
+    SimulationRequest:
+      type: object
+      properties:
+        cityId:
+          type: string
+        interventions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Intervention"
+      required:
+        - cityId
+        - interventions
+    SimulationResult:
+      type: object
+      properties:
+        cityId:
+          type: string
+        temperatureDelta:
+          type: number
+          description: Change in temperature in Celsius
+        groundwaterDelta:
+          type: number
+          description: Change in groundwater level percentage
+        riskScoreDelta:
+          type: number
+          description: Change in risk score
+        airQualityDelta:
+          type: number
+        projectedTemperature:
+          type: number
+        projectedGroundwater:
+          type: number
+        projectedRiskScore:
+          type: number
+        aiInsights:
+          type: array
+          items:
+            type: string
+        interventionBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/InterventionEffect"
+      required:
+        - cityId
+        - temperatureDelta
+        - groundwaterDelta
+        - riskScoreDelta
+        - airQualityDelta
+        - projectedTemperature
+        - projectedGroundwater
+        - projectedRiskScore
+        - aiInsights
+        - interventionBreakdown
+    InterventionEffect:
+      type: object
+      properties:
+        type:
+          type: string
+        effect:
+          type: string
+        temperatureImpact:
+          type: number
+        groundwaterImpact:
+          type: number
+      required:
+        - type
+        - effect
+        - temperatureImpact
+        - groundwaterImpact
+    WeatherData:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        temperature:
+          type: number
+        humidity:
+          type: number
+        windSpeed:
+          type: number
+        windDirection:
+          type: string
+        conditions:
+          type: string
+        uvIndex:
+          type: number
+        feelsLike:
+          type: number
+        visibility:
+          type: number
+      required:
+        - lat
+        - lng
+        - temperature
+        - humidity
+        - windSpeed
+        - windDirection
+        - conditions
+        - uvIndex
+        - feelsLike
+        - visibility

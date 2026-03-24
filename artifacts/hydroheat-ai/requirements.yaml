@@ -1,0 +1,13 @@
+packages:
+  "react-leaflet": "React components for Leaflet maps"
+  "leaflet": "Core map library"
+  "@types/leaflet": "Type definitions for Leaflet"
+  "recharts": "Data visualization for prediction charts"
+  "framer-motion": "Animations for panels and numbers"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+  "lucide-react": "Icons for UI elements"
+
+notes:
+  - "Simulation is executed locally in the frontend to ensure zero-latency interactive updates as requested."
+  - "Hardcoded cities are used as a fallback mechanism if the API endpoint is unavailable."
