@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import type { City, InterventionType, SimulationResult, GeoAnalysis, GeoSimulationContext } from '@workspace/api-client-react';
-import { useGetCities, getGeoAnalysis, calculateSimulation } from '@workspace/api-client-react';
+import { useGetCities, getGetCitiesQueryKey, getGeoAnalysis, calculateSimulation } from '@workspace/api-client-react';
 import { HARDCODED_CITIES, TOOLS, type MapLayer } from '../lib/constants';
 
 export interface LocalIntervention {
@@ -74,7 +74,7 @@ const BASE_API = '/api';
 
 export function SandboxProvider({ children }: { children: React.ReactNode }) {
   const { data: apiCities } = useGetCities({
-    query: { retry: 1, staleTime: Infinity }
+    query: { queryKey: getGetCitiesQueryKey(), retry: 1, staleTime: Infinity }
   });
 
   const cities = apiCities && apiCities.length > 0 ? apiCities : HARDCODED_CITIES;

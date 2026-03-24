@@ -1,0 +1,120 @@
+Build an advanced version of my existing project "HYDROHEAT.AI – Urban Climate Sandbox".
+
+The goal is to significantly improve realism, data accuracy, and visual simulation.
+
+🧠 CORE OBJECTIVE
+
+Upgrade the system from a basic simulation tool to a high-fidelity geo-physics + AI-driven urban climate simulator with real-world datasets, advanced environmental variables, and interactive animations.
+
+🌍 1. DATA INTEGRATION (MAKE IT REALISTIC)
+🔹 Add Real-World Datasets:
+Integrate Hyderabad-specific datasets (HYDRA / GHMC / Telangana open data if available)
+Include:
+Population density
+Water usage statistics
+Sewage and drainage infrastructure
+Land use patterns (existing LULC refinement)
+🔹 Satellite + Geo Data:
+Improve NDVI using Sentinel/Landsat APIs
+Enhance LULC resolution
+Detect high-rise buildings / skyscraper clusters using OpenStreetMap / building footprint datasets
+🏙️ 2. SMART CITY ANALYSIS (NEW FEATURE)
+Detect areas with:
+High skyscraper density
+Low vegetation
+High heat island effect
+Automatically generate AI insights like:
+“This zone has high vertical density and low green cover — recommend green roofs and reflective surfaces”
+“High runoff area — add permeable pavements”
+Highlight these zones visually on the map
+💧 3. WATER SYSTEM SIMULATION (MAJOR UPGRADE)
+🔹 Add New Variables:
+Untreated sewage leakage
+Domestic water wastage
+Pipeline-based water flow
+🔹 Simulate:
+Flow of water from homes → pipelines → leakage → groundwater contamination
+Seepage into soil based on soil type
+Impact on:
+Groundwater quality
+Water availability
+Health risk index
+🌊 4. SEWAGE + POLLUTION ANIMATION
+
+Create detailed animations for:
+
+Underground sewage flow
+Leakage points
+Contamination spreading through soil layers
+Polluted groundwater zones
+
+Make animations:
+
+Physics-based (flow direction, spread rate)
+Interactive (user can toggle layers)
+⚙️ 5. ADVANCED PHYSICS SIMULATION
+
+Upgrade simulation engine with:
+
+🔹 Heat Physics:
+Heat absorption based on albedo
+Urban heat island intensification from skyscrapers
+🔹 Water Physics:
+Infiltration vs runoff
+Soil absorption (based on soil type like Vertisol)
+Drainage overflow → flood simulation
+🔹 Pollution Physics:
+Air pollution spread (radius + wind effect)
+Water contamination diffusion
+🎬 6. VISUAL + ANIMATION UPGRADE
+Add smooth animations for all interventions:
+Trees growing → cooling effect
+Factories → heat + smoke spread
+Sewage → underground contamination
+Rainfall → runoff vs absorption
+Use:
+Layer-based rendering
+Animated overlays
+Time-step simulation (play/pause)
+🤖 7. AI ENHANCEMENTS
+Generate detailed insights:
+Environmental impact
+Risk warnings
+Suggested improvements
+Add:
+“Auto Optimize City” button
+AI suggests best interventions for balance
+📊 8. NEW METRICS TO DISPLAY
+Water wastage index
+Groundwater contamination level
+Infrastructure stress score
+Urban density vs sustainability score
+🧩 9. UI IMPROVEMENTS
+Interactive dashboard panels
+Real-time updates on simulation
+Toggle layers:
+Water systems
+Pollution
+Heat map
+Vegetation
+🚀 10. FINAL GOAL
+
+Transform this into:
+A real-world decision support system for urban planners, not just a simulation.
+
+Focus on:
+
+Accuracy
+Realism
+Interactivity
+Visual clarity
+
+ALL THE ABOVE IS DONE DONT WASTE YOU TIME AND CREDITS WITH THAT 
+the below you were doing while u ran out off credits so do this 
+Let me fix all the TypeScript errors in AIInsightsPanel:
+
+Let me fix the remaining TypeScript errors by looking at those specific lines:
+
+Let me fix the map callback type annotations:
+
+fix the errors and make it work
