@@ -20,4 +20,20 @@ export interface City {
   airQualityIndex: number;
   humidity: number;
   rainfall: number;
+  /** Water wastage index 0-100 (100 = severe) */
+  waterWastageIndex: number;
+  /** Groundwater contamination level 0-100 */
+  contaminationLevel: number;
+  /** Infrastructure stress score 0-100 */
+  infrastructureStress: number;
+  /** High-rise building density percent 0-100 */
+  skyskraperDensity: number;
+  /** Urban sustainability score 0-100 (100 = most sustainable) */
+  sustainabilityScore: number;
+  /** Sewerage system health 0-100 */
+  sewerageSystemHealth: number;
+  /** Flood risk score 0-100 */
+  floodRiskScore: number;
+  /** Population density persons per km² */
+  populationDensity: number;
 }

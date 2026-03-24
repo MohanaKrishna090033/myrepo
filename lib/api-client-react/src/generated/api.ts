@@ -17,11 +17,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AutoOptimizeRequest,
+  AutoOptimizeResult,
   City,
   GeoAnalysis,
   HealthStatus,
   SimulationRequest,
   SimulationResult,
+  SmartZonesResult,
   WeatherData,
 } from "./api.schemas";
 
@@ -346,6 +349,179 @@ export const useCalculateSimulation = <
 > => {
   return useMutation(getCalculateSimulationMutationOptions(options));
 };
+
+/**
+ * @summary AI auto-optimize city interventions
+ */
+export const getAutoOptimizeUrl = () => {
+  return `/api/simulation/auto-optimize`;
+};
+
+export const autoOptimize = async (
+  autoOptimizeRequest: AutoOptimizeRequest,
+  options?: RequestInit,
+): Promise<AutoOptimizeResult> => {
+  return customFetch<AutoOptimizeResult>(getAutoOptimizeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(autoOptimizeRequest),
+  });
+};
+
+export const getAutoOptimizeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof autoOptimize>>,
+    TError,
+    { data: BodyType<AutoOptimizeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof autoOptimize>>,
+  TError,
+  { data: BodyType<AutoOptimizeRequest> },
+  TContext
+> => {
+  const mutationKey = ["autoOptimize"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof autoOptimize>>,
+    { data: BodyType<AutoOptimizeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return autoOptimize(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AutoOptimizeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof autoOptimize>>
+>;
+export type AutoOptimizeMutationBody = BodyType<AutoOptimizeRequest>;
+export type AutoOptimizeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary AI auto-optimize city interventions
+ */
+export const useAutoOptimize = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof autoOptimize>>,
+    TError,
+    { data: BodyType<AutoOptimizeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof autoOptimize>>,
+  TError,
+  { data: BodyType<AutoOptimizeRequest> },
+  TContext
+> => {
+  return useMutation(getAutoOptimizeMutationOptions(options));
+};
+
+/**
+ * @summary Get smart city zone analysis
+ */
+export const getGetSmartZonesUrl = (cityId: string) => {
+  return `/api/smart-zones/${cityId}`;
+};
+
+export const getSmartZones = async (
+  cityId: string,
+  options?: RequestInit,
+): Promise<SmartZonesResult> => {
+  return customFetch<SmartZonesResult>(getGetSmartZonesUrl(cityId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSmartZonesQueryKey = (cityId: string) => {
+  return [`/api/smart-zones/${cityId}`] as const;
+};
+
+export const getGetSmartZonesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSmartZones>>,
+  TError = ErrorType<unknown>,
+>(
+  cityId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSmartZones>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSmartZonesQueryKey(cityId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSmartZones>>> = ({
+    signal,
+  }) => getSmartZones(cityId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!cityId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSmartZones>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSmartZonesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSmartZones>>
+>;
+export type GetSmartZonesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get smart city zone analysis
+ */
+
+export function useGetSmartZones<
+  TData = Awaited<ReturnType<typeof getSmartZones>>,
+  TError = ErrorType<unknown>,
+>(
+  cityId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSmartZones>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSmartZonesQueryOptions(cityId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Returns ISRO-style satellite analysis including NDVI vegetation index, water body detection, LULC classification, real weather data from Open-Meteo, and geo-contextual simulation modifiers.

@@ -31,6 +31,26 @@ export const GetCitiesResponseItem = zod.object({
   airQualityIndex: zod.number(),
   humidity: zod.number(),
   rainfall: zod.number(),
+  waterWastageIndex: zod
+    .number()
+    .describe("Water wastage index 0-100 (100 = severe)"),
+  contaminationLevel: zod
+    .number()
+    .describe("Groundwater contamination level 0-100"),
+  infrastructureStress: zod
+    .number()
+    .describe("Infrastructure stress score 0-100"),
+  skyskraperDensity: zod
+    .number()
+    .describe("High-rise building density percent 0-100"),
+  sustainabilityScore: zod
+    .number()
+    .describe("Urban sustainability score 0-100 (100 = most sustainable)"),
+  sewerageSystemHealth: zod.number().describe("Sewerage system health 0-100"),
+  floodRiskScore: zod.number().describe("Flood risk score 0-100"),
+  populationDensity: zod
+    .number()
+    .describe("Population density persons per km²"),
 });
 export const GetCitiesResponse = zod.array(GetCitiesResponseItem);
 
@@ -55,6 +75,26 @@ export const GetCityByIdResponse = zod.object({
   airQualityIndex: zod.number(),
   humidity: zod.number(),
   rainfall: zod.number(),
+  waterWastageIndex: zod
+    .number()
+    .describe("Water wastage index 0-100 (100 = severe)"),
+  contaminationLevel: zod
+    .number()
+    .describe("Groundwater contamination level 0-100"),
+  infrastructureStress: zod
+    .number()
+    .describe("Infrastructure stress score 0-100"),
+  skyskraperDensity: zod
+    .number()
+    .describe("High-rise building density percent 0-100"),
+  sustainabilityScore: zod
+    .number()
+    .describe("Urban sustainability score 0-100 (100 = most sustainable)"),
+  sewerageSystemHealth: zod.number().describe("Sewerage system health 0-100"),
+  floodRiskScore: zod.number().describe("Flood risk score 0-100"),
+  populationDensity: zod
+    .number()
+    .describe("Population density persons per km²"),
 });
 
 /**
@@ -75,6 +115,10 @@ export const CalculateSimulationBody = zod.object({
         "factory",
         "stubble_burning",
         "fireworks",
+        "sewage_treatment",
+        "water_tank",
+        "cool_road",
+        "rainfall_harvesting",
       ]),
       lat: zod.number(),
       lng: zod.number(),
@@ -107,6 +151,15 @@ export const CalculateSimulationResponse = zod.object({
   projectedTemperature: zod.number(),
   projectedGroundwater: zod.number(),
   projectedRiskScore: zod.number(),
+  waterWastageDelta: zod.number().describe("Change in water wastage index"),
+  contaminationDelta: zod.number().describe("Change in contamination level"),
+  infrastructureStressDelta: zod
+    .number()
+    .describe("Change in infrastructure stress"),
+  floodRiskDelta: zod.number().describe("Change in flood risk score"),
+  sewageLeakageRate: zod
+    .number()
+    .describe("Estimated sewage leakage in liters per day per km"),
   aiInsights: zod.array(zod.string()),
   interventionBreakdown: zod.array(
     zod.object({
@@ -114,11 +167,87 @@ export const CalculateSimulationResponse = zod.object({
       effect: zod.string(),
       temperatureImpact: zod.number(),
       groundwaterImpact: zod.number(),
+      contaminationImpact: zod.number(),
+      waterWastageImpact: zod.number(),
     }),
   ),
   geoAdjusted: zod
     .boolean()
     .describe("Whether geo context was applied to adjust physics"),
+});
+
+/**
+ * @summary AI auto-optimize city interventions
+ */
+export const autoOptimizeBodyPriorityDefault = `balanced`;
+export const autoOptimizeBodyMaxInterventionsDefault = 8;
+
+export const AutoOptimizeBody = zod.object({
+  cityId: zod.string(),
+  priority: zod
+    .enum([
+      "temperature",
+      "groundwater",
+      "air_quality",
+      "water_contamination",
+      "balanced",
+    ])
+    .default(autoOptimizeBodyPriorityDefault),
+  maxInterventions: zod
+    .number()
+    .default(autoOptimizeBodyMaxInterventionsDefault),
+});
+
+export const AutoOptimizeResponse = zod.object({
+  cityId: zod.string(),
+  recommendedInterventions: zod.array(
+    zod.object({
+      type: zod.string(),
+      count: zod.number(),
+      reason: zod.string(),
+      priority: zod.number(),
+    }),
+  ),
+  rationale: zod.string(),
+  projectedImpact: zod.object({
+    temperatureDelta: zod.number(),
+    groundwaterDelta: zod.number(),
+    riskScoreDelta: zod.number(),
+    contaminationDelta: zod.number(),
+  }),
+});
+
+/**
+ * @summary Get smart city zone analysis
+ */
+export const GetSmartZonesParams = zod.object({
+  cityId: zod.coerce.string(),
+});
+
+export const GetSmartZonesResponse = zod.object({
+  cityId: zod.string(),
+  zones: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.enum([
+        "high_skyscraper_density",
+        "low_vegetation",
+        "heat_island",
+        "high_runoff",
+        "sewage_risk",
+        "flood_zone",
+        "industrial_zone",
+      ]),
+      lat: zod.number(),
+      lng: zod.number(),
+      radiusKm: zod.number(),
+      severity: zod.enum(["low", "moderate", "high", "critical"]),
+      insight: zod.string(),
+      recommendations: zod.array(zod.string()),
+    }),
+  ),
+  summary: zod.string(),
 });
 
 /**

@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type InterventionType =
-  (typeof InterventionType)[keyof typeof InterventionType];
+export type InterventionTypeProperty =
+  (typeof InterventionTypeProperty)[keyof typeof InterventionTypeProperty];
 
-export const InterventionType = {
+export const InterventionTypeProperty = {
   tree: "tree",
   fountain: "fountain",
   solar: "solar",

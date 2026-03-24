@@ -5,10 +5,10 @@
  * HydroHeat AI API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { InterventionType } from "./interventionType";
+import type { InterventionTypeProperty } from "./interventionTypeProperty";
 
 export interface Intervention {
-  type: InterventionType;
+  type: InterventionTypeProperty;
   lat: number;
   lng: number;
   count?: number;

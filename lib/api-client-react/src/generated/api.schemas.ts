@@ -23,6 +23,47 @@ export interface City {
   airQualityIndex: number;
   humidity: number;
   rainfall: number;
+  /** Water wastage index 0-100 (100 = severe) */
+  waterWastageIndex: number;
+  /** Groundwater contamination level 0-100 */
+  contaminationLevel: number;
+  /** Infrastructure stress score 0-100 */
+  infrastructureStress: number;
+  /** High-rise building density percent 0-100 */
+  skyskraperDensity: number;
+  /** Urban sustainability score 0-100 (100 = most sustainable) */
+  sustainabilityScore: number;
+  /** Sewerage system health 0-100 */
+  sewerageSystemHealth: number;
+  /** Flood risk score 0-100 */
+  floodRiskScore: number;
+  /** Population density persons per km² */
+  populationDensity: number;
+}
+
+export type InterventionTypeProperty =
+  (typeof InterventionTypeProperty)[keyof typeof InterventionTypeProperty];
+
+export const InterventionTypeProperty = {
+  tree: "tree",
+  fountain: "fountain",
+  solar: "solar",
+  green_roof: "green_roof",
+  permeable_pavement: "permeable_pavement",
+  factory: "factory",
+  stubble_burning: "stubble_burning",
+  fireworks: "fireworks",
+  sewage_treatment: "sewage_treatment",
+  water_tank: "water_tank",
+  cool_road: "cool_road",
+  rainfall_harvesting: "rainfall_harvesting",
+} as const;
+
+export interface Intervention {
+  type: InterventionTypeProperty;
+  lat: number;
+  lng: number;
+  count?: number;
 }
 
 export type InterventionType =
@@ -37,14 +78,11 @@ export const InterventionType = {
   factory: "factory",
   stubble_burning: "stubble_burning",
   fireworks: "fireworks",
+  sewage_treatment: "sewage_treatment",
+  water_tank: "water_tank",
+  cool_road: "cool_road",
+  rainfall_harvesting: "rainfall_harvesting",
 } as const;
-
-export interface Intervention {
-  type: InterventionType;
-  lat: number;
-  lng: number;
-  count?: number;
-}
 
 /**
  * Optional geo context to make physics-based adjustments
@@ -71,6 +109,8 @@ export interface InterventionEffect {
   effect: string;
   temperatureImpact: number;
   groundwaterImpact: number;
+  contaminationImpact: number;
+  waterWastageImpact: number;
 }
 
 export interface SimulationResult {
@@ -82,10 +122,98 @@ export interface SimulationResult {
   projectedTemperature: number;
   projectedGroundwater: number;
   projectedRiskScore: number;
+  /** Change in water wastage index */
+  waterWastageDelta: number;
+  /** Change in contamination level */
+  contaminationDelta: number;
+  /** Change in infrastructure stress */
+  infrastructureStressDelta: number;
+  /** Change in flood risk score */
+  floodRiskDelta: number;
+  /** Estimated sewage leakage in liters per day per km */
+  sewageLeakageRate: number;
   aiInsights: string[];
   interventionBreakdown: InterventionEffect[];
   /** Whether geo context was applied to adjust physics */
   geoAdjusted: boolean;
+}
+
+export type AutoOptimizeRequestPriority =
+  (typeof AutoOptimizeRequestPriority)[keyof typeof AutoOptimizeRequestPriority];
+
+export const AutoOptimizeRequestPriority = {
+  temperature: "temperature",
+  groundwater: "groundwater",
+  air_quality: "air_quality",
+  water_contamination: "water_contamination",
+  balanced: "balanced",
+} as const;
+
+export interface AutoOptimizeRequest {
+  cityId: string;
+  priority?: AutoOptimizeRequestPriority;
+  maxInterventions?: number;
+}
+
+export interface RecommendedIntervention {
+  type: string;
+  count: number;
+  reason: string;
+  priority: number;
+}
+
+export interface ProjectedImpact {
+  temperatureDelta: number;
+  groundwaterDelta: number;
+  riskScoreDelta: number;
+  contaminationDelta: number;
+}
+
+export interface AutoOptimizeResult {
+  cityId: string;
+  recommendedInterventions: RecommendedIntervention[];
+  rationale: string;
+  projectedImpact: ProjectedImpact;
+}
+
+export type SmartZoneType = (typeof SmartZoneType)[keyof typeof SmartZoneType];
+
+export const SmartZoneType = {
+  high_skyscraper_density: "high_skyscraper_density",
+  low_vegetation: "low_vegetation",
+  heat_island: "heat_island",
+  high_runoff: "high_runoff",
+  sewage_risk: "sewage_risk",
+  flood_zone: "flood_zone",
+  industrial_zone: "industrial_zone",
+} as const;
+
+export type SmartZoneSeverity =
+  (typeof SmartZoneSeverity)[keyof typeof SmartZoneSeverity];
+
+export const SmartZoneSeverity = {
+  low: "low",
+  moderate: "moderate",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface SmartZone {
+  id: string;
+  name: string;
+  type: SmartZoneType;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  severity: SmartZoneSeverity;
+  insight: string;
+  recommendations: string[];
+}
+
+export interface SmartZonesResult {
+  cityId: string;
+  zones: SmartZone[];
+  summary: string;
 }
 
 export interface WaterBodyInfo {

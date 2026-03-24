@@ -11,4 +11,6 @@ export interface InterventionEffect {
   effect: string;
   temperatureImpact: number;
   groundwaterImpact: number;
+  contaminationImpact: number;
+  waterWastageImpact: number;
 }

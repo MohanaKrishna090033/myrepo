@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./autoOptimizeRequest";
+export * from "./autoOptimizeRequestPriority";
+export * from "./autoOptimizeResult";
 export * from "./city";
 export * from "./geoAnalysis";
 export * from "./geoSimulationContext";
@@ -13,10 +16,17 @@ export * from "./healthStatus";
 export * from "./intervention";
 export * from "./interventionEffect";
 export * from "./interventionType";
+export * from "./interventionTypeProperty";
 export * from "./iSROAnalysis";
+export * from "./projectedImpact";
 export * from "./realWeatherData";
+export * from "./recommendedIntervention";
 export * from "./simulationModifiers";
 export * from "./simulationRequest";
 export * from "./simulationResult";
+export * from "./smartZone";
+export * from "./smartZoneSeverity";
+export * from "./smartZonesResult";
+export * from "./smartZoneType";
 export * from "./waterBodyInfo";
 export * from "./weatherData";

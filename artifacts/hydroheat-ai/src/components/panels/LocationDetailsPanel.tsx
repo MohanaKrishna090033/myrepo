@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { ThermometerSun, Droplets, Wind, AlertTriangle, Users, Leaf, Waves, Layers, Satellite, Cloud, Loader2 } from 'lucide-react';
+import { ThermometerSun, Droplets, Wind, AlertTriangle, Users, Leaf, Waves, Layers, Satellite, Cloud, Loader2, Gauge, Activity, Shield, Building2, Zap, Flame } from 'lucide-react';
 import { useSandbox } from '../../context/SandboxContext';
 import { AnimatedNumber } from '../ui/animated-number';
 import { FuturePredictionChart } from '../charts/FuturePredictionChart';
@@ -23,6 +23,31 @@ function NDVIBar({ value }: { value: number }) {
         />
       </div>
     </div>
+  );
+}
+
+function MiniBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
+  return (
+    <div className="h-1.5 w-full bg-black/60 rounded-full overflow-hidden border border-white/10">
+      <motion.div
+        className="h-full rounded-full"
+        initial={{ width: 0 }}
+        animate={{ width: `${Math.min(100, (value / max) * 100)}%` }}
+        transition={{ type: 'spring', damping: 20 }}
+        style={{ background: color, boxShadow: `0 0 6px ${color}80` }}
+      />
+    </div>
+  );
+}
+
+function DeltaBadge({ delta, inverse = false, unit = '' }: { delta: number; inverse?: boolean; unit?: string }) {
+  if (delta === 0) return null;
+  const isGood = inverse ? delta < 0 : delta > 0;
+  const isNeg = delta < 0;
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isGood ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+      {isNeg ? '↓' : '↑'} {Math.abs(delta).toFixed(1)}{unit}
+    </span>
   );
 }
 
@@ -55,12 +80,36 @@ export function LocationDetailsPanel() {
 
   const currentRisk = simulationResult?.projectedRiskScore ?? selectedCity.riskScore;
   const tempDelta = simulationResult?.temperatureDelta ?? 0;
+  const gwDelta = simulationResult?.groundwaterDelta ?? 0;
+  const contaminDelta = simulationResult?.contaminationDelta ?? 0;
+  const wasteDelta = simulationResult?.waterWastageDelta ?? 0;
+  const infraDelta = simulationResult?.infrastructureStressDelta ?? 0;
+  const floodDelta = simulationResult?.floodRiskDelta ?? 0;
+  const sewageLeakage = simulationResult?.sewageLeakageRate ?? 0;
+
+  const projContam = Math.max(0, Math.min(100, selectedCity.contaminationLevel + contaminDelta));
+  const projWaste = Math.max(0, Math.min(100, selectedCity.waterWastageIndex + wasteDelta));
+  const projInfra = Math.max(0, Math.min(100, selectedCity.infrastructureStress + infraDelta));
+  const projFlood = Math.max(0, Math.min(100, selectedCity.floodRiskScore + floodDelta));
 
   const feelsLike = geoAnalysis
     ? (geoAnalysis.realWeather.temperature + (geoAnalysis.realWeather.humidity > 70 ? 3 : -2)).toFixed(1)
     : (selectedCity.temperature + (selectedCity.humidity > 70 ? 3 : -2)).toFixed(0);
   const windSpeed = geoAnalysis ? geoAnalysis.realWeather.windSpeed.toFixed(0) : Math.round(8 + selectedCity.heatIslandIntensity * 2);
   const soilM = geoAnalysis ? geoAnalysis.realWeather.soilMoisturePercent : null;
+
+  const getColorForScore = (value: number, inverse = false) => {
+    const v = inverse ? 100 - value : value;
+    if (v > 70) return '#22c55e';
+    if (v > 40) return '#eab308';
+    return '#ef4444';
+  };
+
+  const getTextColorForRisk = (value: number) => {
+    if (value > 70) return 'text-red-400';
+    if (value > 40) return 'text-yellow-400';
+    return 'text-green-400';
+  };
 
   return (
     <AnimatePresence>
@@ -82,7 +131,9 @@ export function LocationDetailsPanel() {
               <div className="flex items-center gap-2 text-sm text-primary/80 font-mono mt-1">
                 <span>{selectedCity.state}</span>
                 <span className="opacity-50">•</span>
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {(selectedCity.population / 1000000).toFixed(1)}M</span>
+                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {(selectedCity.population / 1e6).toFixed(1)}M</span>
+                <span className="opacity-50">•</span>
+                <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {selectedCity.skyskraperDensity}%</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1.5">
@@ -109,8 +160,7 @@ export function LocationDetailsPanel() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-hide">
-
-          {/* Primary Metrics */}
+          {/* Primary Metrics: Temperature + Groundwater */}
           <div className="grid grid-cols-2 gap-4">
             <div className={`bg-black/40 border rounded-xl p-4 relative overflow-hidden transition-all duration-300 ${tempDelta !== 0 ? 'animate-flash border-orange-500/50' : 'border-white/10'}`}>
               <div className="flex items-center justify-between mb-2">
@@ -118,33 +168,23 @@ export function LocationDetailsPanel() {
                   <ThermometerSun className="w-4 h-4" />
                   <span className="text-xs font-mono uppercase font-bold tracking-wider">Temp</span>
                 </div>
-                {tempDelta !== 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tempDelta > 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                    {tempDelta > 0 ? '↑' : '↓'} {Math.abs(tempDelta).toFixed(1)}°
-                  </span>
-                )}
+                <DeltaBadge delta={-tempDelta} unit="°" />
               </div>
               <div className="text-4xl font-bold font-mono text-white tracking-tighter">
                 <AnimatedNumber value={simulationResult?.projectedTemperature ?? selectedCity.temperature} decimals={1} suffix="°" />
               </div>
               {geoAnalysis && (
-                <div className="text-[10px] font-mono text-white/40 mt-1">
-                  Live: {geoAnalysis.realWeather.temperature.toFixed(1)}°C
-                </div>
+                <div className="text-[10px] font-mono text-white/40 mt-1">Live: {geoAnalysis.realWeather.temperature.toFixed(1)}°C</div>
               )}
             </div>
 
-            <div className={`bg-black/40 border rounded-xl p-4 relative overflow-hidden transition-all duration-300 ${(simulationResult?.groundwaterDelta ?? 0) !== 0 ? 'animate-flash border-cyan-500/50' : 'border-white/10'}`}>
+            <div className={`bg-black/40 border rounded-xl p-4 relative overflow-hidden transition-all duration-300 ${gwDelta !== 0 ? 'animate-flash border-cyan-500/50' : 'border-white/10'}`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-cyan-400">
                   <Droplets className="w-4 h-4" />
-                  <span className="text-xs font-mono uppercase font-bold tracking-wider">Ground W.</span>
+                  <span className="text-xs font-mono uppercase font-bold tracking-wider">Groundw.</span>
                 </div>
-                {(simulationResult?.groundwaterDelta ?? 0) !== 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(simulationResult?.groundwaterDelta ?? 0) < 0 ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                    {(simulationResult?.groundwaterDelta ?? 0) > 0 ? '↑' : '↓'} {Math.abs(simulationResult?.groundwaterDelta ?? 0).toFixed(1)}%
-                  </span>
-                )}
+                <DeltaBadge delta={gwDelta} unit="%" />
               </div>
               <div className="text-4xl font-bold font-mono text-white tracking-tighter">
                 <AnimatedNumber value={simulationResult?.projectedGroundwater ?? selectedCity.groundwater} decimals={1} suffix="%" />
@@ -179,6 +219,107 @@ export function LocationDetailsPanel() {
             </div>
           </div>
 
+          {/* New Metrics Section */}
+          <div className="bg-black/30 border border-yellow-500/15 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 border-b border-yellow-500/10 pb-2">
+              <Gauge className="w-4 h-4 text-yellow-400" />
+              <span className="text-xs font-mono text-yellow-400 uppercase tracking-widest font-bold">Water & Infrastructure</span>
+            </div>
+
+            {/* Contamination */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-mono text-white/60 flex items-center gap-1.5">
+                  <span className="text-yellow-400">☣️</span> Contamination
+                </span>
+                <div className="flex items-center gap-2">
+                  <DeltaBadge delta={-contaminDelta} unit=" pts" />
+                  <span className={`text-xs font-bold font-mono ${getTextColorForRisk(projContam)}`}>{projContam.toFixed(0)}/100</span>
+                </div>
+              </div>
+              <MiniBar value={projContam} color={projContam > 70 ? '#ef4444' : projContam > 40 ? '#eab308' : '#22c55e'} />
+            </div>
+
+            {/* Water Wastage */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-mono text-white/60 flex items-center gap-1.5">
+                  <span className="text-blue-400">💧</span> Water Wastage
+                </span>
+                <div className="flex items-center gap-2">
+                  <DeltaBadge delta={-wasteDelta} unit=" pts" />
+                  <span className={`text-xs font-bold font-mono ${getTextColorForRisk(projWaste)}`}>{projWaste.toFixed(0)}/100</span>
+                </div>
+              </div>
+              <MiniBar value={projWaste} color={projWaste > 70 ? '#ef4444' : projWaste > 40 ? '#60a5fa' : '#22c55e'} />
+            </div>
+
+            {/* Infrastructure Stress */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-mono text-white/60 flex items-center gap-1.5">
+                  <span className="text-orange-400">⚡</span> Infra Stress
+                </span>
+                <div className="flex items-center gap-2">
+                  <DeltaBadge delta={-infraDelta} unit=" pts" />
+                  <span className={`text-xs font-bold font-mono ${getTextColorForRisk(projInfra)}`}>{projInfra.toFixed(0)}/100</span>
+                </div>
+              </div>
+              <MiniBar value={projInfra} color={projInfra > 70 ? '#ef4444' : projInfra > 40 ? '#f97316' : '#22c55e'} />
+            </div>
+
+            {/* Sewerage Health */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-mono text-white/60 flex items-center gap-1.5">
+                  <span className="text-teal-400">🚰</span> Sewage Health
+                </span>
+                <span className={`text-xs font-bold font-mono ${selectedCity.sewerageSystemHealth < 40 ? 'text-red-400' : selectedCity.sewerageSystemHealth < 65 ? 'text-yellow-400' : 'text-green-400'}`}>
+                  {selectedCity.sewerageSystemHealth}/100
+                </span>
+              </div>
+              <MiniBar value={selectedCity.sewerageSystemHealth} color={getColorForScore(selectedCity.sewerageSystemHealth, false)} />
+            </div>
+
+            {/* Sewage Leakage Rate */}
+            {sewageLeakage > 0 && (
+              <div className="mt-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="text-[10px] font-mono text-red-300/70 uppercase tracking-widest">Sewage Leakage Rate</div>
+                <div className="text-sm font-bold font-mono text-red-300">{(sewageLeakage / 1000).toFixed(0)}K L/day</div>
+              </div>
+            )}
+          </div>
+
+          {/* Flood & Sustainability Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-black/30 border border-blue-500/15 rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Waves className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-[10px] font-mono text-blue-400 uppercase tracking-widest font-bold">Flood Risk</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold font-mono text-white">
+                  <AnimatedNumber value={projFlood} decimals={0} />
+                  <span className="text-xs text-white/40">/100</span>
+                </div>
+                <DeltaBadge delta={-floodDelta} unit="" />
+              </div>
+              <MiniBar value={projFlood} color={projFlood > 70 ? '#3b82f6' : projFlood > 40 ? '#60a5fa' : '#22c55e'} />
+            </div>
+
+            <div className="bg-black/30 border border-green-500/15 rounded-xl p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Shield className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-[10px] font-mono text-green-400 uppercase tracking-widest font-bold">Sustain.</span>
+              </div>
+              <div className="text-2xl font-bold font-mono text-white">
+                {selectedCity.sustainabilityScore}
+                <span className="text-xs text-white/40">/100</span>
+              </div>
+              <MiniBar value={selectedCity.sustainabilityScore} color={getColorForScore(selectedCity.sustainabilityScore, false)} />
+            </div>
+          </div>
+
           {/* NDVI Vegetation Section */}
           {geoAnalysis && (
             <motion.div
@@ -194,9 +335,7 @@ export function LocationDetailsPanel() {
                 </div>
                 <span className="text-xs font-mono text-white/60">{geoAnalysis.ndvi.toFixed(3)}</span>
               </div>
-
               <NDVIBar value={geoAnalysis.ndvi} />
-
               <div className="flex justify-between items-center pt-1">
                 <div>
                   <div className="text-[11px] text-white/80 font-bold">{geoAnalysis.ndviClass}</div>
@@ -227,7 +366,6 @@ export function LocationDetailsPanel() {
                 </div>
                 <span className="text-[10px] font-mono text-white/40">{geoAnalysis.waterBodyCount} within 100km</span>
               </div>
-
               {geoAnalysis.nearestWaterBody ? (
                 <WaterBodyBadge
                   name={geoAnalysis.nearestWaterBody.name}
@@ -238,14 +376,10 @@ export function LocationDetailsPanel() {
               ) : (
                 <div className="text-xs text-white/30 italic">No major water body detected within 100km</div>
               )}
-
               <div className="flex items-center gap-2">
                 <div className="text-[10px] text-white/40">GW Recharge Potential:</div>
                 <div className="flex-1 h-1.5 bg-black/50 rounded-full overflow-hidden border border-white/10">
-                  <div
-                    className="h-full bg-blue-400 transition-all duration-700"
-                    style={{ width: `${(geoAnalysis.simulationModifiers.groundwaterRechargePotential * 100).toFixed(0)}%` }}
-                  />
+                  <div className="h-full bg-blue-400 transition-all duration-700" style={{ width: `${(geoAnalysis.simulationModifiers.groundwaterRechargePotential * 100).toFixed(0)}%` }} />
                 </div>
                 <div className="text-[10px] text-blue-300 font-mono font-bold">
                   {(geoAnalysis.simulationModifiers.groundwaterRechargePotential * 100).toFixed(0)}%
@@ -266,7 +400,6 @@ export function LocationDetailsPanel() {
                 <Layers className="w-4 h-4 text-violet-400" />
                 <span className="text-xs font-mono text-violet-400 uppercase tracking-widest font-bold">ISRO LULC Analysis</span>
               </div>
-
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-white/40">Land Use Class:</span>
@@ -298,7 +431,7 @@ export function LocationDetailsPanel() {
             </motion.div>
           )}
 
-          {/* Real Weather from Open-Meteo */}
+          {/* Real Weather */}
           {geoAnalysis && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -345,7 +478,7 @@ export function LocationDetailsPanel() {
             </motion.div>
           )}
 
-          {/* Fallback weather when no geo data */}
+          {/* Fallback weather */}
           {!geoAnalysis && !geoLoading && (
             <div className="space-y-3">
               <h3 className="text-xs font-mono text-primary/60 uppercase tracking-[0.2em] border-b border-primary/20 pb-2">Environment Status</h3>
@@ -364,12 +497,25 @@ export function LocationDetailsPanel() {
                     <div className="text-white font-bold">{windSpeed} km/h</div>
                   </div>
                 </div>
+                <div className="flex items-center gap-3 bg-black/40 p-3 rounded-lg border border-white/5">
+                  <Activity className="w-5 h-5 text-purple-300" />
+                  <div>
+                    <div className="text-white/50 text-[10px] uppercase">AQI</div>
+                    <div className={`font-bold ${selectedCity.airQualityIndex > 200 ? 'text-red-400' : selectedCity.airQualityIndex > 100 ? 'text-yellow-400' : 'text-green-400'}`}>{selectedCity.airQualityIndex}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-black/40 p-3 rounded-lg border border-white/5">
+                  <Flame className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <div className="text-white/50 text-[10px] uppercase">UHI</div>
+                    <div className="text-white font-bold">+{selectedCity.heatIslandIntensity}°C</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           <FuturePredictionChart />
-
         </div>
       </motion.div>
     </AnimatePresence>

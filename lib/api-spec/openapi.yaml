@@ -78,6 +78,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SimulationResult"
+  /simulation/auto-optimize:
+    post:
+      operationId: autoOptimize
+      tags: [simulation]
+      summary: AI auto-optimize city interventions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoOptimizeRequest"
+      responses:
+        "200":
+          description: Recommended interventions and rationale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoOptimizeResult"
+  /smart-zones/{cityId}:
+    get:
+      operationId: getSmartZones
+      tags: [geo]
+      summary: Get smart city zone analysis
+      parameters:
+        - name: cityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Smart zone analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartZonesResult"
   /geo-analysis/{lat}/{lng}:
     get:
       operationId: getGeoAnalysis
@@ -166,6 +202,30 @@ components:
           type: number
         rainfall:
           type: number
+        waterWastageIndex:
+          type: number
+          description: Water wastage index 0-100 (100 = severe)
+        contaminationLevel:
+          type: number
+          description: Groundwater contamination level 0-100
+        infrastructureStress:
+          type: number
+          description: Infrastructure stress score 0-100
+        skyskraperDensity:
+          type: number
+          description: High-rise building density percent 0-100
+        sustainabilityScore:
+          type: number
+          description: Urban sustainability score 0-100 (100 = most sustainable)
+        sewerageSystemHealth:
+          type: number
+          description: Sewerage system health 0-100
+        floodRiskScore:
+          type: number
+          description: Flood risk score 0-100
+        populationDensity:
+          type: number
+          description: Population density persons per km²
       required:
         - id
         - name
@@ -180,12 +240,20 @@ components:
         - airQualityIndex
         - humidity
         - rainfall
+        - waterWastageIndex
+        - contaminationLevel
+        - infrastructureStress
+        - skyskraperDensity
+        - sustainabilityScore
+        - sewerageSystemHealth
+        - floodRiskScore
+        - populationDensity
     Intervention:
       type: object
       properties:
         type:
           type: string
-          enum: [tree, fountain, solar, green_roof, permeable_pavement, factory, stubble_burning, fireworks]
+          enum: [tree, fountain, solar, green_roof, permeable_pavement, factory, stubble_burning, fireworks, sewage_treatment, water_tank, cool_road, rainfall_harvesting]
         lat:
           type: number
         lng:
@@ -197,6 +265,9 @@ components:
         - type
         - lat
         - lng
+    InterventionType:
+      type: string
+      enum: [tree, fountain, solar, green_roof, permeable_pavement, factory, stubble_burning, fireworks, sewage_treatment, water_tank, cool_road, rainfall_harvesting]
     SimulationRequest:
       type: object
       properties:
@@ -259,6 +330,21 @@ components:
           type: number
         projectedRiskScore:
           type: number
+        waterWastageDelta:
+          type: number
+          description: Change in water wastage index
+        contaminationDelta:
+          type: number
+          description: Change in contamination level
+        infrastructureStressDelta:
+          type: number
+          description: Change in infrastructure stress
+        floodRiskDelta:
+          type: number
+          description: Change in flood risk score
+        sewageLeakageRate:
+          type: number
+          description: Estimated sewage leakage in liters per day per km
         aiInsights:
           type: array
           items:
@@ -279,6 +365,11 @@ components:
         - projectedTemperature
         - projectedGroundwater
         - projectedRiskScore
+        - waterWastageDelta
+        - contaminationDelta
+        - infrastructureStressDelta
+        - floodRiskDelta
+        - sewageLeakageRate
         - aiInsights
         - interventionBreakdown
         - geoAdjusted
@@ -293,11 +384,131 @@ components:
           type: number
         groundwaterImpact:
           type: number
+        contaminationImpact:
+          type: number
+        waterWastageImpact:
+          type: number
       required:
         - type
         - effect
         - temperatureImpact
         - groundwaterImpact
+        - contaminationImpact
+        - waterWastageImpact
+    AutoOptimizeRequest:
+      type: object
+      properties:
+        cityId:
+          type: string
+        priority:
+          type: string
+          enum: [temperature, groundwater, air_quality, water_contamination, balanced]
+          default: balanced
+        maxInterventions:
+          type: integer
+          default: 8
+      required:
+        - cityId
+    AutoOptimizeResult:
+      type: object
+      properties:
+        cityId:
+          type: string
+        recommendedInterventions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendedIntervention"
+        rationale:
+          type: string
+        projectedImpact:
+          $ref: "#/components/schemas/ProjectedImpact"
+      required:
+        - cityId
+        - recommendedInterventions
+        - rationale
+        - projectedImpact
+    RecommendedIntervention:
+      type: object
+      properties:
+        type:
+          type: string
+        count:
+          type: integer
+        reason:
+          type: string
+        priority:
+          type: integer
+      required:
+        - type
+        - count
+        - reason
+        - priority
+    ProjectedImpact:
+      type: object
+      properties:
+        temperatureDelta:
+          type: number
+        groundwaterDelta:
+          type: number
+        riskScoreDelta:
+          type: number
+        contaminationDelta:
+          type: number
+      required:
+        - temperatureDelta
+        - groundwaterDelta
+        - riskScoreDelta
+        - contaminationDelta
+    SmartZonesResult:
+      type: object
+      properties:
+        cityId:
+          type: string
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartZone"
+        summary:
+          type: string
+      required:
+        - cityId
+        - zones
+        - summary
+    SmartZone:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [high_skyscraper_density, low_vegetation, heat_island, high_runoff, sewage_risk, flood_zone, industrial_zone]
+        lat:
+          type: number
+        lng:
+          type: number
+        radiusKm:
+          type: number
+        severity:
+          type: string
+          enum: [low, moderate, high, critical]
+        insight:
+          type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - type
+        - lat
+        - lng
+        - radiusKm
+        - severity
+        - insight
+        - recommendations
     GeoAnalysis:
       type: object
       properties:

@@ -16,6 +16,16 @@ export interface SimulationResult {
   projectedTemperature: number;
   projectedGroundwater: number;
   projectedRiskScore: number;
+  /** Change in water wastage index */
+  waterWastageDelta: number;
+  /** Change in contamination level */
+  contaminationDelta: number;
+  /** Change in infrastructure stress */
+  infrastructureStressDelta: number;
+  /** Change in flood risk score */
+  floodRiskDelta: number;
+  /** Estimated sewage leakage in liters per day per km */
+  sewageLeakageRate: number;
   aiInsights: string[];
   interventionBreakdown: InterventionEffect[];
   /** Whether geo context was applied to adjust physics */
