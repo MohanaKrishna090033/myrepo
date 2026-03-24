@@ -7,10 +7,16 @@
  */
 
 export * from "./city";
+export * from "./geoAnalysis";
+export * from "./geoSimulationContext";
 export * from "./healthStatus";
 export * from "./intervention";
 export * from "./interventionEffect";
 export * from "./interventionType";
+export * from "./iSROAnalysis";
+export * from "./realWeatherData";
+export * from "./simulationModifiers";
 export * from "./simulationRequest";
 export * from "./simulationResult";
+export * from "./waterBodyInfo";
 export * from "./weatherData";

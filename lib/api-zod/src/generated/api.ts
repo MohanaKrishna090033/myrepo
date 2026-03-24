@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,7 +15,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Returns list of Indian cities with climate data
  * @summary Get all cities
  */
 export const GetCitiesResponseItem = zod.object({
@@ -25,16 +23,14 @@ export const GetCitiesResponseItem = zod.object({
   state: zod.string(),
   lat: zod.number(),
   lng: zod.number(),
-  temperature: zod.number().describe("Current temperature in Celsius"),
-  groundwater: zod.number().describe("Groundwater level percentage (0-100)"),
-  riskScore: zod.number().describe("Risk score (0-100)"),
+  temperature: zod.number(),
+  groundwater: zod.number(),
+  riskScore: zod.number(),
   population: zod.number(),
-  heatIslandIntensity: zod
-    .number()
-    .describe("Urban heat island intensity in degrees C above surroundings"),
+  heatIslandIntensity: zod.number(),
   airQualityIndex: zod.number(),
   humidity: zod.number(),
-  rainfall: zod.number().describe("Annual rainfall in mm"),
+  rainfall: zod.number(),
 });
 export const GetCitiesResponse = zod.array(GetCitiesResponseItem);
 
@@ -51,20 +47,18 @@ export const GetCityByIdResponse = zod.object({
   state: zod.string(),
   lat: zod.number(),
   lng: zod.number(),
-  temperature: zod.number().describe("Current temperature in Celsius"),
-  groundwater: zod.number().describe("Groundwater level percentage (0-100)"),
-  riskScore: zod.number().describe("Risk score (0-100)"),
+  temperature: zod.number(),
+  groundwater: zod.number(),
+  riskScore: zod.number(),
   population: zod.number(),
-  heatIslandIntensity: zod
-    .number()
-    .describe("Urban heat island intensity in degrees C above surroundings"),
+  heatIslandIntensity: zod.number(),
   airQualityIndex: zod.number(),
   humidity: zod.number(),
-  rainfall: zod.number().describe("Annual rainfall in mm"),
+  rainfall: zod.number(),
 });
 
 /**
- * @summary Calculate simulation with interventions
+ * @summary Calculate simulation with interventions and geo context
  */
 export const calculateSimulationBodyInterventionsItemCountDefault = 1;
 
@@ -89,15 +83,26 @@ export const CalculateSimulationBody = zod.object({
         .default(calculateSimulationBodyInterventionsItemCountDefault),
     }),
   ),
+  geoContext: zod
+    .object({
+      ndvi: zod.number(),
+      waterBodyDistanceKm: zod.number(),
+      landUseClass: zod.string(),
+      soilMoisturePercent: zod.number(),
+      urbanDensityPercent: zod.number(),
+      treeEffectivenessMultiplier: zod.number(),
+      permeablePavementEffectiveness: zod.number(),
+      groundwaterRechargePotential: zod.number(),
+    })
+    .optional()
+    .describe("Optional geo context to make physics-based adjustments"),
 });
 
 export const CalculateSimulationResponse = zod.object({
   cityId: zod.string(),
-  temperatureDelta: zod.number().describe("Change in temperature in Celsius"),
-  groundwaterDelta: zod
-    .number()
-    .describe("Change in groundwater level percentage"),
-  riskScoreDelta: zod.number().describe("Change in risk score"),
+  temperatureDelta: zod.number(),
+  groundwaterDelta: zod.number(),
+  riskScoreDelta: zod.number(),
   airQualityDelta: zod.number(),
   projectedTemperature: zod.number(),
   projectedGroundwater: zod.number(),
@@ -111,6 +116,78 @@ export const CalculateSimulationResponse = zod.object({
       groundwaterImpact: zod.number(),
     }),
   ),
+  geoAdjusted: zod
+    .boolean()
+    .describe("Whether geo context was applied to adjust physics"),
+});
+
+/**
+ * Returns ISRO-style satellite analysis including NDVI vegetation index, water body detection, LULC classification, real weather data from Open-Meteo, and geo-contextual simulation modifiers.
+
+ * @summary Get geo-spatial intelligence for coordinates
+ */
+export const GetGeoAnalysisParams = zod.object({
+  lat: zod.coerce.number(),
+  lng: zod.coerce.number(),
+});
+
+export const GetGeoAnalysisResponse = zod.object({
+  lat: zod.number(),
+  lng: zod.number(),
+  ndvi: zod
+    .number()
+    .describe("Normalized Difference Vegetation Index (-1 to 1)"),
+  ndviClass: zod.string().describe("Vegetation classification"),
+  ndviHealthScore: zod.number().describe("Vegetation health 0-100"),
+  nearestWaterBody: zod
+    .object({
+      name: zod.string(),
+      type: zod.string(),
+      distanceKm: zod.number(),
+      influenceLevel: zod.string(),
+    })
+    .optional(),
+  waterBodyCount: zod.number().describe("Number of water bodies within 100km"),
+  landUseClass: zod.string().describe("ISRO LULC classification"),
+  urbanDensityPercent: zod.number(),
+  soilType: zod.string(),
+  droughtIndex: zod.number().describe("0-100, higher = more drought-prone"),
+  realWeather: zod.object({
+    temperature: zod.number(),
+    humidity: zod.number(),
+    windSpeed: zod.number(),
+    precipitation: zod.number(),
+    cloudCover: zod.number(),
+    soilMoisturePercent: zod.number(),
+    evapotranspiration: zod.number(),
+    source: zod.string(),
+  }),
+  isroAnalysis: zod
+    .object({
+      lulcClass: zod.string(),
+      lulcSubClass: zod.string(),
+      vegetationHealthIndex: zod.number(),
+      surfaceAlbedo: zod.number(),
+      evapotranspirationRate: zod.number(),
+      landsatBand: zod.string(),
+      carbonSequestrationKgPerHa: zod.number(),
+      soilErosionRisk: zod.string(),
+      floodRisk: zod.string(),
+      heatIslandCategory: zod.string(),
+    })
+    .describe("ISRO Bhuvan-style satellite data analysis"),
+  simulationModifiers: zod
+    .object({
+      treeEffectivenessMultiplier: zod.number(),
+      permeablePavementEffectiveness: zod.number(),
+      groundwaterRechargePotential: zod.number(),
+      heatIslandSeverity: zod.number(),
+      solarEffectiveness: zod.number(),
+      factoryImpactMultiplier: zod.number(),
+    })
+    .describe("Physics multipliers derived from geo context"),
+  geoRecommendations: zod.array(zod.string()),
+  dataSource: zod.string().describe("Data provenance note"),
 });
 
 /**

@@ -13,13 +13,14 @@ tags:
     description: City and climate data
   - name: simulation
     description: Simulation and interventions
+  - name: geo
+    description: Geo-spatial intelligence
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -32,7 +33,6 @@ paths:
       operationId: getCities
       tags: [cities]
       summary: Get all cities
-      description: Returns list of Indian cities with climate data
       responses:
         "200":
           description: List of cities
@@ -64,7 +64,7 @@ paths:
     post:
       operationId: calculateSimulation
       tags: [simulation]
-      summary: Calculate simulation with interventions
+      summary: Calculate simulation with interventions and geo context
       requestBody:
         required: true
         content:
@@ -78,6 +78,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SimulationResult"
+  /geo-analysis/{lat}/{lng}:
+    get:
+      operationId: getGeoAnalysis
+      tags: [geo]
+      summary: Get geo-spatial intelligence for coordinates
+      description: >
+        Returns ISRO-style satellite analysis including NDVI vegetation index,
+        water body detection, LULC classification, real weather data from Open-Meteo,
+        and geo-contextual simulation modifiers.
+      parameters:
+        - name: lat
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Geo-spatial analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoAnalysis"
   /weather/{lat}/{lng}:
     get:
       operationId: getWeather
@@ -125,25 +152,20 @@ components:
           type: number
         temperature:
           type: number
-          description: Current temperature in Celsius
         groundwater:
           type: number
-          description: Groundwater level percentage (0-100)
         riskScore:
           type: number
-          description: Risk score (0-100)
         population:
           type: number
         heatIslandIntensity:
           type: number
-          description: Urban heat island intensity in degrees C above surroundings
         airQualityIndex:
           type: number
         humidity:
           type: number
         rainfall:
           type: number
-          description: Annual rainfall in mm
       required:
         - id
         - name
@@ -184,9 +206,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Intervention"
+        geoContext:
+          $ref: "#/components/schemas/GeoSimulationContext"
       required:
         - cityId
         - interventions
+    GeoSimulationContext:
+      type: object
+      description: Optional geo context to make physics-based adjustments
+      properties:
+        ndvi:
+          type: number
+        waterBodyDistanceKm:
+          type: number
+        landUseClass:
+          type: string
+        soilMoisturePercent:
+          type: number
+        urbanDensityPercent:
+          type: number
+        treeEffectivenessMultiplier:
+          type: number
+        permeablePavementEffectiveness:
+          type: number
+        groundwaterRechargePotential:
+          type: number
+      required:
+        - ndvi
+        - waterBodyDistanceKm
+        - landUseClass
+        - soilMoisturePercent
+        - urbanDensityPercent
+        - treeEffectivenessMultiplier
+        - permeablePavementEffectiveness
+        - groundwaterRechargePotential
     SimulationResult:
       type: object
       properties:
@@ -194,13 +247,10 @@ components:
           type: string
         temperatureDelta:
           type: number
-          description: Change in temperature in Celsius
         groundwaterDelta:
           type: number
-          description: Change in groundwater level percentage
         riskScoreDelta:
           type: number
-          description: Change in risk score
         airQualityDelta:
           type: number
         projectedTemperature:
@@ -217,6 +267,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InterventionEffect"
+        geoAdjusted:
+          type: boolean
+          description: Whether geo context was applied to adjust physics
       required:
         - cityId
         - temperatureDelta
@@ -228,6 +281,7 @@ components:
         - projectedRiskScore
         - aiInsights
         - interventionBreakdown
+        - geoAdjusted
     InterventionEffect:
       type: object
       properties:
@@ -244,6 +298,168 @@ components:
         - effect
         - temperatureImpact
         - groundwaterImpact
+    GeoAnalysis:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        ndvi:
+          type: number
+          description: Normalized Difference Vegetation Index (-1 to 1)
+        ndviClass:
+          type: string
+          description: Vegetation classification
+        ndviHealthScore:
+          type: number
+          description: Vegetation health 0-100
+        nearestWaterBody:
+          $ref: "#/components/schemas/WaterBodyInfo"
+        waterBodyCount:
+          type: integer
+          description: Number of water bodies within 100km
+        landUseClass:
+          type: string
+          description: ISRO LULC classification
+        urbanDensityPercent:
+          type: number
+        soilType:
+          type: string
+        droughtIndex:
+          type: number
+          description: 0-100, higher = more drought-prone
+        realWeather:
+          $ref: "#/components/schemas/RealWeatherData"
+        isroAnalysis:
+          $ref: "#/components/schemas/ISROAnalysis"
+        simulationModifiers:
+          $ref: "#/components/schemas/SimulationModifiers"
+        geoRecommendations:
+          type: array
+          items:
+            type: string
+        dataSource:
+          type: string
+          description: Data provenance note
+      required:
+        - lat
+        - lng
+        - ndvi
+        - ndviClass
+        - ndviHealthScore
+        - waterBodyCount
+        - landUseClass
+        - urbanDensityPercent
+        - soilType
+        - droughtIndex
+        - realWeather
+        - isroAnalysis
+        - simulationModifiers
+        - geoRecommendations
+        - dataSource
+    WaterBodyInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        distanceKm:
+          type: number
+        influenceLevel:
+          type: string
+      required:
+        - name
+        - type
+        - distanceKm
+        - influenceLevel
+    RealWeatherData:
+      type: object
+      properties:
+        temperature:
+          type: number
+        humidity:
+          type: number
+        windSpeed:
+          type: number
+        precipitation:
+          type: number
+        cloudCover:
+          type: number
+        soilMoisturePercent:
+          type: number
+        evapotranspiration:
+          type: number
+        source:
+          type: string
+      required:
+        - temperature
+        - humidity
+        - windSpeed
+        - precipitation
+        - cloudCover
+        - soilMoisturePercent
+        - evapotranspiration
+        - source
+    ISROAnalysis:
+      type: object
+      description: ISRO Bhuvan-style satellite data analysis
+      properties:
+        lulcClass:
+          type: string
+        lulcSubClass:
+          type: string
+        vegetationHealthIndex:
+          type: number
+        surfaceAlbedo:
+          type: number
+        evapotranspirationRate:
+          type: number
+        landsatBand:
+          type: string
+        carbonSequestrationKgPerHa:
+          type: number
+        soilErosionRisk:
+          type: string
+        floodRisk:
+          type: string
+        heatIslandCategory:
+          type: string
+      required:
+        - lulcClass
+        - lulcSubClass
+        - vegetationHealthIndex
+        - surfaceAlbedo
+        - evapotranspirationRate
+        - landsatBand
+        - carbonSequestrationKgPerHa
+        - soilErosionRisk
+        - floodRisk
+        - heatIslandCategory
+    SimulationModifiers:
+      type: object
+      description: Physics multipliers derived from geo context
+      properties:
+        treeEffectivenessMultiplier:
+          type: number
+        permeablePavementEffectiveness:
+          type: number
+        groundwaterRechargePotential:
+          type: number
+        heatIslandSeverity:
+          type: number
+        solarEffectiveness:
+          type: number
+        factoryImpactMultiplier:
+          type: number
+      required:
+        - treeEffectivenessMultiplier
+        - permeablePavementEffectiveness
+        - groundwaterRechargePotential
+        - heatIslandSeverity
+        - solarEffectiveness
+        - factoryImpactMultiplier
     WeatherData:
       type: object
       properties:

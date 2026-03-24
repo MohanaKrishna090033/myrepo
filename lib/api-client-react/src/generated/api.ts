@@ -18,6 +18,7 @@ import type {
 
 import type {
   City,
+  GeoAnalysis,
   HealthStatus,
   SimulationRequest,
   SimulationResult,
@@ -34,7 +35,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -110,7 +110,6 @@ export function useHealthCheck<
 }
 
 /**
- * Returns list of Indian cities with climate data
  * @summary Get all cities
  */
 export const getGetCitiesUrl = () => {
@@ -263,7 +262,7 @@ export function useGetCityById<
 }
 
 /**
- * @summary Calculate simulation with interventions
+ * @summary Calculate simulation with interventions and geo context
  */
 export const getCalculateSimulationUrl = () => {
   return `/api/simulation/calculate`;
@@ -326,7 +325,7 @@ export type CalculateSimulationMutationBody = BodyType<SimulationRequest>;
 export type CalculateSimulationMutationError = ErrorType<unknown>;
 
 /**
- * @summary Calculate simulation with interventions
+ * @summary Calculate simulation with interventions and geo context
  */
 export const useCalculateSimulation = <
   TError = ErrorType<unknown>,
@@ -347,6 +346,99 @@ export const useCalculateSimulation = <
 > => {
   return useMutation(getCalculateSimulationMutationOptions(options));
 };
+
+/**
+ * Returns ISRO-style satellite analysis including NDVI vegetation index, water body detection, LULC classification, real weather data from Open-Meteo, and geo-contextual simulation modifiers.
+
+ * @summary Get geo-spatial intelligence for coordinates
+ */
+export const getGetGeoAnalysisUrl = (lat: number, lng: number) => {
+  return `/api/geo-analysis/${lat}/${lng}`;
+};
+
+export const getGeoAnalysis = async (
+  lat: number,
+  lng: number,
+  options?: RequestInit,
+): Promise<GeoAnalysis> => {
+  return customFetch<GeoAnalysis>(getGetGeoAnalysisUrl(lat, lng), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGeoAnalysisQueryKey = (lat: number, lng: number) => {
+  return [`/api/geo-analysis/${lat}/${lng}`] as const;
+};
+
+export const getGetGeoAnalysisQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGeoAnalysis>>,
+  TError = ErrorType<unknown>,
+>(
+  lat: number,
+  lng: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGeoAnalysis>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetGeoAnalysisQueryKey(lat, lng);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGeoAnalysis>>> = ({
+    signal,
+  }) => getGeoAnalysis(lat, lng, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(lat && lng),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGeoAnalysis>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGeoAnalysisQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGeoAnalysis>>
+>;
+export type GetGeoAnalysisQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get geo-spatial intelligence for coordinates
+ */
+
+export function useGetGeoAnalysis<
+  TData = Awaited<ReturnType<typeof getGeoAnalysis>>,
+  TError = ErrorType<unknown>,
+>(
+  lat: number,
+  lng: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGeoAnalysis>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGeoAnalysisQueryOptions(lat, lng, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get local weather for coordinates

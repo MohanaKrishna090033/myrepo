@@ -15,18 +15,13 @@ export interface City {
   state: string;
   lat: number;
   lng: number;
-  /** Current temperature in Celsius */
   temperature: number;
-  /** Groundwater level percentage (0-100) */
   groundwater: number;
-  /** Risk score (0-100) */
   riskScore: number;
   population: number;
-  /** Urban heat island intensity in degrees C above surroundings */
   heatIslandIntensity: number;
   airQualityIndex: number;
   humidity: number;
-  /** Annual rainfall in mm */
   rainfall: number;
 }
 
@@ -51,9 +46,24 @@ export interface Intervention {
   count?: number;
 }
 
+/**
+ * Optional geo context to make physics-based adjustments
+ */
+export interface GeoSimulationContext {
+  ndvi: number;
+  waterBodyDistanceKm: number;
+  landUseClass: string;
+  soilMoisturePercent: number;
+  urbanDensityPercent: number;
+  treeEffectivenessMultiplier: number;
+  permeablePavementEffectiveness: number;
+  groundwaterRechargePotential: number;
+}
+
 export interface SimulationRequest {
   cityId: string;
   interventions: Intervention[];
+  geoContext?: GeoSimulationContext;
 }
 
 export interface InterventionEffect {
@@ -65,11 +75,8 @@ export interface InterventionEffect {
 
 export interface SimulationResult {
   cityId: string;
-  /** Change in temperature in Celsius */
   temperatureDelta: number;
-  /** Change in groundwater level percentage */
   groundwaterDelta: number;
-  /** Change in risk score */
   riskScoreDelta: number;
   airQualityDelta: number;
   projectedTemperature: number;
@@ -77,6 +84,80 @@ export interface SimulationResult {
   projectedRiskScore: number;
   aiInsights: string[];
   interventionBreakdown: InterventionEffect[];
+  /** Whether geo context was applied to adjust physics */
+  geoAdjusted: boolean;
+}
+
+export interface WaterBodyInfo {
+  name: string;
+  type: string;
+  distanceKm: number;
+  influenceLevel: string;
+}
+
+export interface RealWeatherData {
+  temperature: number;
+  humidity: number;
+  windSpeed: number;
+  precipitation: number;
+  cloudCover: number;
+  soilMoisturePercent: number;
+  evapotranspiration: number;
+  source: string;
+}
+
+/**
+ * ISRO Bhuvan-style satellite data analysis
+ */
+export interface ISROAnalysis {
+  lulcClass: string;
+  lulcSubClass: string;
+  vegetationHealthIndex: number;
+  surfaceAlbedo: number;
+  evapotranspirationRate: number;
+  landsatBand: string;
+  carbonSequestrationKgPerHa: number;
+  soilErosionRisk: string;
+  floodRisk: string;
+  heatIslandCategory: string;
+}
+
+/**
+ * Physics multipliers derived from geo context
+ */
+export interface SimulationModifiers {
+  treeEffectivenessMultiplier: number;
+  permeablePavementEffectiveness: number;
+  groundwaterRechargePotential: number;
+  heatIslandSeverity: number;
+  solarEffectiveness: number;
+  factoryImpactMultiplier: number;
+}
+
+export interface GeoAnalysis {
+  lat: number;
+  lng: number;
+  /** Normalized Difference Vegetation Index (-1 to 1) */
+  ndvi: number;
+  /** Vegetation classification */
+  ndviClass: string;
+  /** Vegetation health 0-100 */
+  ndviHealthScore: number;
+  nearestWaterBody?: WaterBodyInfo;
+  /** Number of water bodies within 100km */
+  waterBodyCount: number;
+  /** ISRO LULC classification */
+  landUseClass: string;
+  urbanDensityPercent: number;
+  soilType: string;
+  /** 0-100, higher = more drought-prone */
+  droughtIndex: number;
+  realWeather: RealWeatherData;
+  isroAnalysis: ISROAnalysis;
+  simulationModifiers: SimulationModifiers;
+  geoRecommendations: string[];
+  /** Data provenance note */
+  dataSource: string;
 }
 
 export interface WeatherData {

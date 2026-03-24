@@ -5,9 +5,11 @@
  * HydroHeat AI API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GeoSimulationContext } from "./geoSimulationContext";
 import type { Intervention } from "./intervention";
 
 export interface SimulationRequest {
   cityId: string;
   interventions: Intervention[];
+  geoContext?: GeoSimulationContext;
 }

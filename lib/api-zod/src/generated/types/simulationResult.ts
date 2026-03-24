@@ -9,11 +9,8 @@ import type { InterventionEffect } from "./interventionEffect";
 
 export interface SimulationResult {
   cityId: string;
-  /** Change in temperature in Celsius */
   temperatureDelta: number;
-  /** Change in groundwater level percentage */
   groundwaterDelta: number;
-  /** Change in risk score */
   riskScoreDelta: number;
   airQualityDelta: number;
   projectedTemperature: number;
@@ -21,4 +18,6 @@ export interface SimulationResult {
   projectedRiskScore: number;
   aiInsights: string[];
   interventionBreakdown: InterventionEffect[];
+  /** Whether geo context was applied to adjust physics */
+  geoAdjusted: boolean;
 }

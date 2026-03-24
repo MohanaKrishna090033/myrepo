@@ -12,17 +12,12 @@ export interface City {
   state: string;
   lat: number;
   lng: number;
-  /** Current temperature in Celsius */
   temperature: number;
-  /** Groundwater level percentage (0-100) */
   groundwater: number;
-  /** Risk score (0-100) */
   riskScore: number;
   population: number;
-  /** Urban heat island intensity in degrees C above surroundings */
   heatIslandIntensity: number;
   airQualityIndex: number;
   humidity: number;
-  /** Annual rainfall in mm */
   rainfall: number;
 }
