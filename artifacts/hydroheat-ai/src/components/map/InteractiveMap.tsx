@@ -46,19 +46,124 @@ function CityViewUpdater() {
   return null;
 }
 
-export function InteractiveMap() {
-  const { cities, selectCity, interventions, updateIntervention } = useSandbox();
+function MapOverlay() {
+  const map = useMap();
+  const { placementEffects } = useSandbox();
+  const [activeAnimations, setActiveAnimations] = useState<Array<{ id: string, type: string, x: number, y: number, timestamp: number }>>([]);
 
-  const getMarkerIcon = (risk: number) => {
-    let size = 20;
+  useEffect(() => {
+    if (placementEffects.length === 0) return;
+    
+    const latest = placementEffects[placementEffects.length - 1];
+    if (Date.now() - latest.timestamp < 500) {
+      const point = map.latLngToContainerPoint([latest.lat, latest.lng]);
+      const anim = { id: latest.id, type: latest.type, x: point.x, y: point.y, timestamp: Date.now() };
+      
+      setActiveAnimations(prev => [...prev, anim]);
+      
+      setTimeout(() => {
+        setActiveAnimations(prev => prev.filter(a => a.id !== anim.id));
+      }, 2500);
+    }
+  }, [placementEffects, map]);
+
+  if (activeAnimations.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-[500] overflow-hidden">
+      {activeAnimations.map((anim) => {
+        return (
+          <div key={anim.id} className="absolute" style={{ left: anim.x, top: anim.y, transform: 'translate(-50%, -50%)' }}>
+            {anim.type === 'tree' && (
+              <>
+                <div className="absolute inset-0 rounded-full bg-green-500/30 border-2 border-green-500 animate-ripple w-8 h-8 -ml-4 -mt-4" />
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="absolute w-2 h-2 bg-green-400 rounded-full" 
+                       style={{ 
+                         animation: `particle-fly 1s ease-out forwards`,
+                         '--tx': `${Math.cos(i * Math.PI / 3) * 60}px`, 
+                         '--ty': `${Math.sin(i * Math.PI / 3) * 60}px` 
+                       } as React.CSSProperties} />
+                ))}
+                <div className="absolute text-xl animate-float -ml-2 -mt-2">🌿</div>
+              </>
+            )}
+            {anim.type === 'fountain' && (
+              <>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="absolute inset-0 rounded-full border-blue-400 animate-water w-8 h-8 -ml-4 -mt-4" style={{ animationDelay: `${i * 0.2}s` }} />
+                ))}
+              </>
+            )}
+            {anim.type === 'solar' && (
+              <>
+                <div className="absolute w-12 h-12 bg-yellow-400/50 rounded-full animate-star -ml-6 -mt-6" />
+                <div className="absolute text-yellow-300 font-bold font-mono animate-float -ml-4 -mt-2">+☀️</div>
+              </>
+            )}
+            {anim.type === 'factory' && (
+              <>
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="absolute w-10 h-10 bg-gray-600/80 rounded-full blur-md animate-smoke -ml-5" style={{ animationDelay: `${i * 0.3}s`, left: `${(i - 1) * 10}px` }} />
+                ))}
+              </>
+            )}
+            {anim.type === 'stubble_burning' && (
+              <>
+                <div className="absolute w-16 h-16 bg-orange-500/40 rounded-full blur-xl animate-ripple -ml-8 -mt-8" />
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="absolute w-2 h-2 bg-red-500 rounded-full blur-[1px] animate-fire" style={{ animationDelay: `${Math.random() * 0.3}s`, left: `${(Math.random() - 0.5) * 40}px` }} />
+                ))}
+              </>
+            )}
+            {anim.type === 'fireworks' && (
+              <>
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="absolute w-1 h-1 bg-pink-400 rounded-full shadow-[0_0_5px_#fff]" 
+                       style={{ 
+                         animation: `particle-fly 0.8s ease-out forwards`,
+                         '--tx': `${Math.cos(i * Math.PI / 4) * 80}px`, 
+                         '--ty': `${Math.sin(i * Math.PI / 4) * 80}px` 
+                       } as React.CSSProperties} />
+                ))}
+                <div className="absolute w-2 h-2 bg-yellow-300 animate-ripple rounded-full -ml-1 -mt-1 shadow-[0_0_10px_#fff]" />
+              </>
+            )}
+            {anim.type === 'green_roof' && (
+              <div className="absolute w-16 h-16 border-4 border-emerald-400/50 rounded-lg animate-ripple -ml-8 -mt-8" />
+            )}
+            {anim.type === 'permeable_pavement' && (
+              <div className="absolute w-16 h-16 border-2 border-stone-400/50 bg-blue-500/20 rounded-full animate-ripple -ml-8 -mt-8" style={{ animationDirection: 'reverse' }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function InteractiveMap() {
+  const { cities, selectCity, selectedCity, interventions, updateIntervention } = useSandbox();
+
+  const getMarkerIcon = (city: typeof cities[0]) => {
+    let size = 28;
     let className = 'city-marker ';
-    if (risk > 70) className += 'city-marker-high';
-    else if (risk > 40) className += 'city-marker-medium';
+    if (city.riskScore > 70) className += 'city-marker-high';
+    else if (city.riskScore > 40) className += 'city-marker-medium';
     else className += 'city-marker-low';
 
+    if (selectedCity?.id === city.id) {
+      className += ' city-marker-selected';
+    }
+
     return L.divIcon({
-      className: 'bg-transparent',
-      html: `<div class="${className}" style="width:${size}px; height:${size}px;"></div>`,
+      className: 'bg-transparent overflow-visible',
+      html: `
+        <div class="relative w-full h-full">
+          <div class="${className}" style="width:${size}px; height:${size}px;"></div>
+          <div class="city-label-pill">${city.name}</div>
+        </div>
+      `,
       iconSize: [size, size],
       iconAnchor: [size/2, size/2],
     });
@@ -69,8 +174,8 @@ export function InteractiveMap() {
     return L.divIcon({
       className: 'bg-transparent',
       html: `<div class="intervention-marker ${tool?.colorClass}">${tool?.icon || '📍'}</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
     });
   };
 
@@ -91,12 +196,13 @@ export function InteractiveMap() {
         <ZoomControl position="bottomright" />
         <MapEvents />
         <CityViewUpdater />
+        <MapOverlay />
 
         {cities.map((city) => (
           <Marker 
             key={city.id} 
             position={[city.lat, city.lng]} 
-            icon={getMarkerIcon(city.riskScore)}
+            icon={getMarkerIcon(city)}
             eventHandlers={{
               click: () => selectCity(city.id)
             }}

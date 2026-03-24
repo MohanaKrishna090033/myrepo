@@ -138,42 +138,63 @@
 /* Custom Marker Animations */
 @keyframes pulse-ring-red {
   0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 50, 50, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(255, 50, 50, 0); }
+  70% { transform: scale(1.5); box-shadow: 0 0 0 20px rgba(255, 50, 50, 0); }
   100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 50, 50, 0); }
 }
 @keyframes pulse-ring-orange {
   0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 150, 50, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(255, 150, 50, 0); }
+  70% { transform: scale(1.5); box-shadow: 0 0 0 20px rgba(255, 150, 50, 0); }
   100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(255, 150, 50, 0); }
 }
 @keyframes pulse-ring-green {
   0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(50, 255, 100, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(50, 255, 100, 0); }
+  70% { transform: scale(1.5); box-shadow: 0 0 0 20px rgba(50, 255, 100, 0); }
   100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(50, 255, 100, 0); }
 }
 
 .city-marker {
   border-radius: 50%;
   border: 2px solid #fff;
+  position: relative;
 }
+.city-marker::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.5;
+  animation: pulse-ring-green 2s infinite;
+}
+
 .city-marker-high {
   background: #ff3232;
-  animation: pulse-ring-red 2s infinite;
   border-color: #ffaaaa;
+  color: #ff3232;
+}
+.city-marker-high::after {
+  animation-name: pulse-ring-red;
 }
 .city-marker-medium {
   background: #ff9632;
-  animation: pulse-ring-orange 2s infinite;
   border-color: #ffd4aa;
+  color: #ff9632;
+}
+.city-marker-medium::after {
+  animation-name: pulse-ring-orange;
 }
 .city-marker-low {
   background: #32ff64;
-  animation: pulse-ring-green 2s infinite;
   border-color: #aaffc4;
+  color: #32ff64;
+}
+
+.city-marker-selected {
+  box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.5);
 }
 
 .intervention-marker {
-  font-size: 24px;
+  font-size: 28px;
   line-height: 1;
   text-align: center;
   display: flex;
@@ -186,4 +207,73 @@
 .intervention-marker:active {
   cursor: grabbing;
   transform: scale(1.2);
+}
+
+/* Overlays */
+@keyframes ripple-expand {
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(4); opacity: 0; }
+}
+@keyframes particle-fly {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+@keyframes smoke-rise {
+  0% { transform: translateY(0) scale(1); opacity: 0.6; }
+  100% { transform: translateY(-60px) scale(2); opacity: 0; }
+}
+@keyframes fire-burst {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-50px) scale(0.5); opacity: 0; }
+}
+@keyframes water-ripple {
+  0% { transform: scale(0.5); opacity: 0.8; border-width: 3px; }
+  100% { transform: scale(3); opacity: 0; border-width: 1px; }
+}
+@keyframes scan-line {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+@keyframes flash-glow {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(2) saturate(2); }
+  100% { filter: brightness(1); }
+}
+@keyframes typing-reveal {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-80px); opacity: 0; }
+}
+@keyframes starburst {
+  0% { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2) rotate(45deg); opacity: 0; }
+}
+
+.animate-ripple { animation: ripple-expand 1.2s ease-out forwards; }
+.animate-smoke { animation: smoke-rise 1.5s ease-out forwards; }
+.animate-fire { animation: fire-burst 1s ease-out forwards; }
+.animate-water { animation: water-ripple 1.5s ease-out forwards; }
+.animate-scan { animation: scan-line 1.5s linear infinite; }
+.animate-flash { animation: flash-glow 0.5s ease-in-out; }
+.animate-float { animation: float-up 1.5s ease-out forwards; }
+.animate-star { animation: starburst 1s ease-out forwards; }
+
+.city-label-pill {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
 }
