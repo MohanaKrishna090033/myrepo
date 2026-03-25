@@ -423,6 +423,131 @@ export function SewageContaminationOverlay() {
   );
 }
 
+// Factory contamination spread overlay — active when factories are placed
+export function FactoryContaminationOverlay() {
+  const map = useMap();
+  const { interventions, geoAnalysis } = useSandbox();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animRef = useRef<number>(0);
+
+  const factories = interventions.filter(i => i.type === 'factory');
+  const waterBodyDistKm = geoAnalysis?.nearestWaterBody?.distanceKm ?? 999;
+  const waterBodyName = geoAnalysis?.nearestWaterBody?.name ?? 'nearby water body';
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (factories.length === 0) {
+      cancelAnimationFrame(animRef.current);
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = map.getSize();
+    canvas.width = size.x;
+    canvas.height = size.y;
+
+    const SMOKE_DURATION = 4000;
+    const NUM_RINGS = 4;
+
+    const animate = () => {
+      ctx.clearRect(0, 0, size.x, size.y);
+      const now = Date.now();
+
+      for (const factory of factories) {
+        const point = map.latLngToContainerPoint([factory.lat, factory.lng]);
+
+        // Smoke/smog pool
+        const poolGrad = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 140);
+        poolGrad.addColorStop(0, 'rgba(60, 60, 60, 0.55)');
+        poolGrad.addColorStop(0.3, 'rgba(80, 50, 20, 0.40)');
+        poolGrad.addColorStop(0.65, 'rgba(50, 30, 10, 0.20)');
+        poolGrad.addColorStop(1, 'rgba(30, 15, 5, 0)');
+        ctx.fillStyle = poolGrad;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 140, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Expanding smoke rings
+        for (let r = 0; r < NUM_RINGS; r++) {
+          const offset = (r / NUM_RINGS) * SMOKE_DURATION;
+          const phase = ((now - offset) % SMOKE_DURATION) / SMOKE_DURATION;
+          const ringRadius = 180 * phase;
+          const alpha = 0.45 * (1 - phase);
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, ringRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(100, 70, 30, ${alpha})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Factory marker
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(200, 100, 20, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 150, 50, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = 'rgba(255, 180, 80, 0.9)';
+        ctx.textAlign = 'center';
+        ctx.fillText('🏭 FACTORY', point.x, point.y - 13);
+        ctx.textAlign = 'left';
+
+        // Water body risk warning if close
+        if (waterBodyDistKm < 8) {
+          const threatPhase = ((now * 0.4) % SMOKE_DURATION) / SMOKE_DURATION;
+          const threatRadius = 200 * threatPhase;
+          const threatAlpha = 0.5 * (1 - threatPhase);
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, threatRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 120, 20, ${threatAlpha})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          const labelY = point.y - 155;
+          ctx.font = 'bold 10px monospace';
+          ctx.fillStyle = 'rgba(255, 140, 30, 0.9)';
+          ctx.textAlign = 'center';
+          ctx.fillText(`⚠ ${waterBodyName} POLLUTION RISK (${waterBodyDistKm.toFixed(1)}km)`, point.x, labelY);
+          ctx.textAlign = 'left';
+        }
+      }
+
+      animRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+    return () => cancelAnimationFrame(animRef.current);
+  }, [factories.length, map, waterBodyDistKm, waterBodyName]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (canvasRef.current) {
+        const size = map.getSize();
+        canvasRef.current.width = size.x;
+        canvasRef.current.height = size.y;
+      }
+    };
+    map.on('resize zoomend moveend', handler);
+    return () => { map.off('resize zoomend moveend', handler); };
+  }, [map]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 214, mixBlendMode: 'multiply' }}
+    />
+  );
+}
+
 // Smart zone severity → color
 const SEVERITY_COLOR: Record<string, string> = {
   critical: '#ef4444',

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { ThermometerSun, Droplets, Wind, AlertTriangle, Users, Leaf, Waves, Layers, Satellite, Cloud, Loader2, Gauge, Activity, Shield, Building2, Zap, Flame } from 'lucide-react';
+import { ThermometerSun, Droplets, Wind, AlertTriangle, Users, Leaf, Waves, Layers, Satellite, Cloud, Loader2, Gauge, Activity, Shield, Building2, Zap, Flame, FlaskConical, Factory, Sprout } from 'lucide-react';
 import { useSandbox } from '../../context/SandboxContext';
 import { AnimatedNumber } from '../ui/animated-number';
 import { FuturePredictionChart } from '../charts/FuturePredictionChart';
@@ -73,8 +73,40 @@ function WaterBodyBadge({ name, type, distanceKm, influence }: { name: string; t
   );
 }
 
+function ScoreGauge({ label, value, icon, colorFn }: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  colorFn: (v: number) => string;
+}) {
+  const color = colorFn(value);
+  const grade = value >= 80 ? 'A' : value >= 60 ? 'B' : value >= 40 ? 'C' : value >= 20 ? 'D' : 'F';
+  const gradeColor = value >= 80 ? 'text-green-400' : value >= 60 ? 'text-yellow-400' : value >= 40 ? 'text-orange-400' : 'text-red-400';
+  return (
+    <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-white/50">{icon}<span className="text-[9px] font-mono uppercase tracking-widest">{label}</span></div>
+        <span className={`text-[11px] font-mono font-bold ${gradeColor}`}>{grade}</span>
+      </div>
+      <div className="flex items-end gap-2">
+        <span className="text-2xl font-bold font-mono text-white leading-none">{Math.round(value)}</span>
+        <span className="text-[10px] text-white/30 mb-0.5">/100</span>
+      </div>
+      <div className="h-1.5 w-full bg-black/60 rounded-full overflow-hidden border border-white/10">
+        <motion.div
+          className="h-full rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${value}%` }}
+          transition={{ type: 'spring', damping: 20 }}
+          style={{ background: color, boxShadow: `0 0 6px ${color}80` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function LocationDetailsPanel() {
-  const { selectedCity, simulationResult, isSimulating, geoAnalysis, geoLoading } = useSandbox();
+  const { selectedCity, simulationResult, isSimulating, geoAnalysis, geoLoading, scores } = useSandbox();
 
   if (!selectedCity) return null;
 
@@ -218,6 +250,46 @@ export function LocationDetailsPanel() {
               </motion.div>
             </div>
           </div>
+
+          {/* Environment Scores Section */}
+          {scores && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05, type: 'spring', damping: 20 }}
+              className="bg-black/30 border border-primary/20 rounded-xl p-4 space-y-3"
+            >
+              <div className="flex items-center gap-2 border-b border-primary/15 pb-2">
+                <Activity className="w-4 h-4 text-primary" />
+                <span className="text-xs font-mono text-primary uppercase tracking-widest font-bold">Environment Scores</span>
+                <span className="ml-auto text-[9px] font-mono text-white/30">LIVE</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              </div>
+              <div className="flex gap-2">
+                <ScoreGauge
+                  label="Water Quality"
+                  value={scores.waterQualityScore}
+                  icon={<FlaskConical className="w-3 h-3" />}
+                  colorFn={v => v >= 70 ? '#22d3ee' : v >= 40 ? '#f59e0b' : '#ef4444'}
+                />
+                <ScoreGauge
+                  label="Pollution"
+                  value={scores.pollutionScore}
+                  icon={<Factory className="w-3 h-3" />}
+                  colorFn={v => v >= 70 ? '#4ade80' : v >= 40 ? '#f97316' : '#ef4444'}
+                />
+                <ScoreGauge
+                  label="Sustain."
+                  value={scores.sustainabilityScore}
+                  icon={<Sprout className="w-3 h-3" />}
+                  colorFn={v => v >= 70 ? '#a3e635' : v >= 40 ? '#eab308' : '#f97316'}
+                />
+              </div>
+              <div className="text-[9px] font-mono text-white/25 leading-relaxed">
+                Scores update in real-time as you place interventions. Harmful entities near water bodies amplify penalties.
+              </div>
+            </motion.div>
+          )}
 
           {/* New Metrics Section */}
           <div className="bg-black/30 border border-yellow-500/15 rounded-xl p-4 space-y-3">

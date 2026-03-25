@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ZoomControl, useM
 import L from 'leaflet';
 import { useSandbox } from '../../context/SandboxContext';
 import { MAP_CENTER, INITIAL_ZOOM, TOOLS } from '../../lib/constants';
-import { CanvasLayerOverlay, WaterParticleSystem, SmartZoneOverlay, SewageContaminationOverlay } from './MapLayerOverlays';
+import { CanvasLayerOverlay, WaterParticleSystem, SmartZoneOverlay, SewageContaminationOverlay, FactoryContaminationOverlay } from './MapLayerOverlays';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -190,6 +190,7 @@ function OverlayRenderer() {
       <CanvasLayerOverlay />
       <WaterParticleSystem />
       <SewageContaminationOverlay />
+      <FactoryContaminationOverlay />
       <SmartZoneOverlay />
     </>
   );

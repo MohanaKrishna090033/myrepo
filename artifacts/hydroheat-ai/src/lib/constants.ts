@@ -44,6 +44,24 @@ export const TOOLS: ToolDef[] = [
   { type: 'fireworks', name: 'Fireworks', icon: '🎆', colorClass: 'text-rose-400 border-rose-500/50', impactDesc: '+0.2°C, AQI +20', category: 'negative', tab: 'harmful' },
 ];
 
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function distanceToWaterMultiplier(approxDistKm: number): number {
+  if (approxDistKm < 1) return 3.0;
+  if (approxDistKm < 3) return 2.2;
+  if (approxDistKm < 6) return 1.6;
+  if (approxDistKm < 10) return 1.2;
+  return 1.0;
+}
+
 export const MAP_CENTER: [number, number] = [20.5937, 78.9629];
 export const INITIAL_ZOOM = 5;
 

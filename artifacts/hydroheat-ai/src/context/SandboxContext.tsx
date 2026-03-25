@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { City, InterventionType, SimulationResult, GeoAnalysis, GeoSimulationContext } from '@workspace/api-client-react';
 import { useGetCities, getGetCitiesQueryKey, getGeoAnalysis, calculateSimulation } from '@workspace/api-client-react';
-import { HARDCODED_CITIES, TOOLS, type MapLayer } from '../lib/constants';
+import { HARDCODED_CITIES, TOOLS, haversineKm, distanceToWaterMultiplier, type MapLayer } from '../lib/constants';
 
 export interface LocalIntervention {
   id: string;
@@ -36,6 +36,12 @@ export interface AutoOptimizeResult {
   projectedImpact: { temperatureDelta: number; groundwaterDelta: number; riskScoreDelta: number; contaminationDelta: number };
 }
 
+export interface EnvironmentScores {
+  waterQualityScore: number;
+  pollutionScore: number;
+  sustainabilityScore: number;
+}
+
 interface SandboxContextType {
   cities: City[];
   selectedCity: City | null;
@@ -56,6 +62,7 @@ interface SandboxContextType {
   toolTab: 'green' | 'water' | 'harmful';
   waterWastagePercent: number;
   rainwaterHarvestingEnabled: boolean;
+  scores: EnvironmentScores | null;
 
   selectCity: (cityId: string | null) => void;
   setActiveTool: (tool: string | null) => void;
@@ -294,22 +301,97 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
 
   const applyAutoOptimize = useCallback(() => {
     if (!autoOptimizeResult || !selectedCity) return;
-    clearInterventions();
+    // PRESERVE user-placed interventions — only ADD optimized ones
+    const factories = interventions.filter(i => i.type === 'factory');
+    const sewageSources = interventions.filter(i => i.type === 'sewage_untreated');
+    const stubbleSites = interventions.filter(i => i.type === 'stubble_burning');
+
     const newInvs: LocalIntervention[] = [];
     for (const rec of autoOptimizeResult.recommendedInterventions) {
       for (let i = 0; i < rec.count; i++) {
-        const jitter = (Math.random() - 0.5) * 0.04;
-        const jitter2 = (Math.random() - 0.5) * 0.04;
+        let baseLat = selectedCity.lat;
+        let baseLng = selectedCity.lng;
+
+        // Place trees adjacent to factories for maximum mitigation
+        if (rec.type === 'tree' && factories.length > 0) {
+          const src = factories[i % factories.length];
+          baseLat = src.lat;
+          baseLng = src.lng;
+        }
+        // Place trees adjacent to stubble burning sites
+        else if (rec.type === 'tree' && stubbleSites.length > 0) {
+          const src = stubbleSites[i % stubbleSites.length];
+          baseLat = src.lat;
+          baseLng = src.lng;
+        }
+        // Place sewage treatment plants near sewage sources
+        else if (rec.type === 'sewage_treatment' && sewageSources.length > 0) {
+          const src = sewageSources[i % sewageSources.length];
+          baseLat = src.lat;
+          baseLng = src.lng;
+        }
+        // Place permeable pavement near sewage/factory runoff areas
+        else if (rec.type === 'permeable_pavement' && (sewageSources.length > 0 || factories.length > 0)) {
+          const harmful = [...sewageSources, ...factories];
+          const src = harmful[i % harmful.length];
+          baseLat = src.lat;
+          baseLng = src.lng;
+        }
+
+        const jitter = (Math.random() - 0.5) * 0.025;
+        const jitter2 = (Math.random() - 0.5) * 0.025;
         newInvs.push({
           id: Math.random().toString(36).substring(7),
           type: rec.type,
-          lat: selectedCity.lat + jitter,
-          lng: selectedCity.lng + jitter2,
+          lat: baseLat + jitter,
+          lng: baseLng + jitter2,
         });
       }
     }
-    setInterventions(newInvs);
-  }, [autoOptimizeResult, selectedCity]);
+    setInterventions(prev => [...prev, ...newInvs]);
+  }, [autoOptimizeResult, selectedCity, interventions]);
+
+  const scores = useMemo((): EnvironmentScores | null => {
+    if (!selectedCity) return null;
+
+    const contaminDelta = simulationResult?.contaminationDelta ?? 0;
+    const airQualityDelta = simulationResult?.airQualityDelta ?? 0;
+
+    const harmfulTypes = ['factory', 'sewage_untreated', 'stubble_burning', 'fireworks'];
+    const greenTypes = ['tree', 'fountain', 'solar', 'green_roof', 'permeable_pavement', 'sewage_treatment', 'water_tank', 'cool_road', 'rainfall_harvesting'];
+    const harmfulCount = interventions.filter(i => harmfulTypes.includes(i.type)).length;
+    const greenCount = interventions.filter(i => greenTypes.includes(i.type)).length;
+
+    const waterBodyDistKm = geoAnalysis?.nearestWaterBody?.distanceKm ?? 999;
+
+    // Distance-based water contamination penalty from actual intervention positions
+    let waterProximityPenalty = 0;
+    for (const inv of interventions) {
+      if (inv.type === 'sewage_untreated' || inv.type === 'factory') {
+        const invDistFromCity = haversineKm(inv.lat, inv.lng, selectedCity.lat, selectedCity.lng);
+        // Estimated distance from intervention to water body (lower bound approximation)
+        const approxDistToWater = Math.max(0.5, waterBodyDistKm - invDistFromCity);
+        const mult = distanceToWaterMultiplier(approxDistToWater);
+        waterProximityPenalty += inv.type === 'sewage_untreated'
+          ? 15 * (mult - 1)
+          : 8 * (mult - 1);
+      }
+    }
+
+    const waterQualityScore = Math.max(0, Math.min(100,
+      (100 - selectedCity.contaminationLevel) - Math.max(0, contaminDelta) - waterProximityPenalty
+    ));
+
+    const pollutionScore = Math.max(0, Math.min(100,
+      (100 - Math.min(100, selectedCity.airQualityIndex / 4)) - Math.max(0, airQualityDelta * 0.25)
+    ));
+
+    const sustainabilityScore = Math.max(0, Math.min(100,
+      selectedCity.sustainabilityScore + (greenCount * 3) - (harmfulCount * 5)
+    ));
+
+    return { waterQualityScore, pollutionScore, sustainabilityScore };
+  }, [selectedCity, simulationResult, interventions, geoAnalysis]);
 
   return (
     <SandboxContext.Provider value={{
@@ -332,6 +414,7 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
       toolTab,
       waterWastagePercent,
       rainwaterHarvestingEnabled,
+      scores,
       selectCity,
       setActiveTool,
       addIntervention,
@@ -396,31 +479,38 @@ function buildLocalExtras(
     aiInsights.push(`💧 Rainwater harvesting is OFF. ${city.rainfall ?? 800}mm/year of rainfall is being lost to surface runoff. Enable harvesting to improve recharge.`);
   }
 
-  // Sewage untreated sources
+  // Sewage untreated sources — distance-based contamination
   const sewageSources = invs.filter(i => i.type === 'sewage_untreated');
   const waterBodyDistKm = geo?.nearestWaterBody?.distanceKm ?? 999;
   const waterBodyName = geo?.nearestWaterBody?.name ?? 'nearby water body';
 
-  for (const _ of sewageSources) {
+  let closestSewageToWater = Infinity;
+  for (const sewage of sewageSources) {
+    const invDistFromCity = haversineKm(sewage.lat, sewage.lng, city.lat, city.lng);
+    const approxDistToWater = Math.max(0.5, waterBodyDistKm - invDistFromCity);
+    if (approxDistToWater < closestSewageToWater) closestSewageToWater = approxDistToWater;
+    const distMult = distanceToWaterMultiplier(approxDistToWater);
     gwDelta -= 4;
-    contamDelta += 30;
+    contamDelta += 30 * distMult;
     floodDelta += 8;
     tempDelta += 0.3;
   }
 
   if (sewageSources.length > 0) {
     const soilType = geo?.landUseClass ?? 'Vertisol';
-    aiInsights.push(`🚨 Critical: ${sewageSources.length} untreated sewage source${sewageSources.length > 1 ? 's' : ''} detected. Contamination spreading via distance-based diffusion model (${soilType} soil absorption).`);
+    aiInsights.push(`🚨 Critical: ${sewageSources.length} untreated sewage source${sewageSources.length > 1 ? 's' : ''} detected. Distance-based diffusion active (${soilType} soil). Impact multiplier: ${distanceToWaterMultiplier(closestSewageToWater).toFixed(1)}×.`);
 
-    if (waterBodyDistKm < 3) {
-      aiInsights.push(`⚠️ Alert: Sewage contamination detected near ${waterBodyName} (${waterBodyDistKm.toFixed(1)}km away). Water body at high risk — pathogen load may cause irreversible damage. Add Sewage Treatment Plants immediately.`);
-    } else if (waterBodyDistKm < 8) {
-      aiInsights.push(`⚠️ Warning: Sewage plume may reach ${waterBodyName} (${waterBodyDistKm.toFixed(1)}km away) within 48–72 hours based on soil flow models. Recommend: Add Treatment Plant or increase filtration.`);
+    if (closestSewageToWater < 3) {
+      aiInsights.push(`⚠️ CRITICAL ALERT: Sewage source is ~${closestSewageToWater.toFixed(1)}km from ${waterBodyName}. Water body contamination IMMINENT — pathogen load is irreversible. Deploy Sewage Treatment Plants NOW.`);
+    } else if (closestSewageToWater < 6) {
+      aiInsights.push(`⚠️ Warning: Sewage plume ~${closestSewageToWater.toFixed(1)}km from ${waterBodyName}. Contamination spread expected within 48–72 hours. Recommend: Sewage Treatment Plant or Permeable Pavement immediately.`);
+    } else if (closestSewageToWater < 10) {
+      aiInsights.push(`📊 Sewage source ~${closestSewageToWater.toFixed(1)}km from ${waterBodyName}. Risk is moderate — soil filtration may contain spread. Monitor and add Permeable Pavement to intercept runoff.`);
     }
 
     const sewageCount = sewageSources.length;
     const leakageLiters = Math.round(sewageCount * city.population * 0.0015 * (1 + wastagePercent / 100));
-    aiInsights.push(`📊 Estimated sewage discharge: ${(leakageLiters / 1000).toFixed(0)}K L/day. Groundwater contamination radius: ~${(sewageCount * 1.2).toFixed(1)}km. Fix: Install STP or Permeable Pavement to filter pathogens.`);
+    aiInsights.push(`📊 Estimated sewage discharge: ${(leakageLiters / 1000).toFixed(0)}K L/day. Contamination radius: ~${(sewageCount * 1.2 * distanceToWaterMultiplier(closestSewageToWater)).toFixed(1)}km. Fix: Install STP or Permeable Pavement to filter pathogens.`);
   }
 
   const sewageLeakage = sewageSources.length > 0
@@ -433,8 +523,14 @@ function buildLocalExtras(
 function buildLocalResult(city: City, invs: LocalIntervention[], wastagePercent: number, rainHarvest: boolean, geo: GeoAnalysis | null): SimulationResult {
   let tempDelta = 0, gwDelta = 0, aqiDelta = 0, wasteDelta = 0, contamDelta = 0, infraDelta = 0, floodDelta = 0;
   const counts: Record<string, number> = {};
+  const waterBodyDistKm = geo?.nearestWaterBody?.distanceKm ?? 999;
+
   invs.forEach(inv => {
     counts[inv.type] = (counts[inv.type] || 0) + 1;
+    const invDistFromCity = haversineKm(inv.lat, inv.lng, city.lat, city.lng);
+    const approxDistToWater = Math.max(0.5, waterBodyDistKm - invDistFromCity);
+    const distMult = distanceToWaterMultiplier(approxDistToWater);
+
     switch (inv.type) {
       case 'tree': tempDelta -= 0.3; gwDelta += 0.5; contamDelta -= 3; break;
       case 'fountain': gwDelta += 2.0; wasteDelta += 3; break;
@@ -445,8 +541,9 @@ function buildLocalResult(city: City, invs: LocalIntervention[], wastagePercent:
       case 'water_tank': wasteDelta -= 10; floodDelta -= 5; gwDelta += 0.8; break;
       case 'cool_road': tempDelta -= 0.25; break;
       case 'rainfall_harvesting': gwDelta += 2.5; wasteDelta -= 15; floodDelta -= 10; break;
-      case 'sewage_untreated': gwDelta -= 4; contamDelta += 30; floodDelta += 8; tempDelta += 0.3; break;
-      case 'factory': tempDelta += 1.5; gwDelta -= 2.0; aqiDelta += 30; contamDelta += 18; break;
+      // Distance-scaled: sewage and factory cause more damage when close to water body
+      case 'sewage_untreated': gwDelta -= 4; contamDelta += 30 * distMult; floodDelta += 8; tempDelta += 0.3; break;
+      case 'factory': tempDelta += 1.5; gwDelta -= 2.0; aqiDelta += 30; contamDelta += 18 * distMult; infraDelta += 8; break;
       case 'stubble_burning': tempDelta += 0.8; gwDelta -= 1.0; aqiDelta += 50; contamDelta += 8; break;
       case 'fireworks': tempDelta += 0.2; aqiDelta += 20; break;
     }
