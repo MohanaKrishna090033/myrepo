@@ -5,7 +5,7 @@ import { HARDCODED_CITIES, TOOLS, type MapLayer } from '../lib/constants';
 
 export interface LocalIntervention {
   id: string;
-  type: typeof InterventionType[keyof typeof InterventionType];
+  type: string;
   lat: number;
   lng: number;
 }
@@ -39,7 +39,7 @@ export interface AutoOptimizeResult {
 interface SandboxContextType {
   cities: City[];
   selectedCity: City | null;
-  activeTool: typeof InterventionType[keyof typeof InterventionType] | null;
+  activeTool: string | null;
   interventions: LocalIntervention[];
   simulationResult: SimulationResult | null;
   isSimulating: boolean;
@@ -54,9 +54,11 @@ interface SandboxContextType {
   autoOptimizing: boolean;
   autoOptimizeResult: AutoOptimizeResult | null;
   toolTab: 'green' | 'water' | 'harmful';
+  waterWastagePercent: number;
+  rainwaterHarvestingEnabled: boolean;
 
   selectCity: (cityId: string | null) => void;
-  setActiveTool: (tool: typeof InterventionType[keyof typeof InterventionType] | null) => void;
+  setActiveTool: (tool: string | null) => void;
   addIntervention: (intervention: Omit<LocalIntervention, 'id'>) => void;
   removeIntervention: (id: string) => void;
   updateIntervention: (id: string, lat: number, lng: number) => void;
@@ -66,6 +68,8 @@ interface SandboxContextType {
   runAutoOptimize: (priority?: string) => Promise<void>;
   applyAutoOptimize: () => void;
   setToolTab: (tab: 'green' | 'water' | 'harmful') => void;
+  setWaterWastagePercent: (v: number) => void;
+  toggleRainwaterHarvesting: () => void;
 }
 
 const SandboxContext = createContext<SandboxContextType | undefined>(undefined);
@@ -77,10 +81,10 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
     query: { queryKey: getGetCitiesQueryKey(), retry: 1, staleTime: Infinity }
   });
 
-  const cities = apiCities && apiCities.length > 0 ? apiCities : HARDCODED_CITIES;
+  const cities = Array.isArray(apiCities) && apiCities.length > 0 ? apiCities : HARDCODED_CITIES;
 
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
-  const [activeTool, setActiveTool] = useState<typeof InterventionType[keyof typeof InterventionType] | null>(null);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
   const [interventions, setInterventions] = useState<LocalIntervention[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [lastPlacedIntervention, setLastPlacedIntervention] = useState<{ type: string; lat: number; lng: number } | null>(null);
@@ -95,6 +99,8 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
   const [autoOptimizing, setAutoOptimizing] = useState(false);
   const [autoOptimizeResult, setAutoOptimizeResult] = useState<AutoOptimizeResult | null>(null);
   const [toolTab, setToolTab] = useState<'green' | 'water' | 'harmful'>('green');
+  const [waterWastagePercent, setWaterWastagePercent] = useState(40);
+  const [rainwaterHarvestingEnabled, setRainwaterHarvestingEnabled] = useState(false);
 
   const selectedCity = cities.find(c => c.id === selectedCityId) || null;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,8 +117,8 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
     setGeoLoading(true);
 
     getGeoAnalysis(selectedCity.lat, selectedCity.lng, { signal: geoAbortRef.current.signal })
-      .then(data => setGeoAnalysis(data))
-      .catch(err => {
+      .then((data: GeoAnalysis) => setGeoAnalysis(data))
+      .catch((err: { name?: string }) => {
         if (err?.name !== 'AbortError') {
           console.warn('[GeoAnalysis] fetch failed:', err);
           setGeoAnalysis(null);
@@ -136,9 +142,13 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
   const runSimulation = useCallback(async (
     city: City,
     invs: LocalIntervention[],
-    geo: GeoAnalysis | null
+    geo: GeoAnalysis | null,
+    wastage: number,
+    rainHarvest: boolean,
   ) => {
-    if (invs.length === 0) {
+    const apiInvs = invs.filter(i => i.type !== 'sewage_untreated');
+
+    if (apiInvs.length === 0 && invs.length === 0) {
       setSimulationResult({
         cityId: city.id,
         temperatureDelta: 0,
@@ -177,22 +187,34 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
         : undefined;
 
       const counts: Record<string, number> = {};
-      invs.forEach(i => { counts[i.type] = (counts[i.type] || 0) + 1; });
+      apiInvs.forEach(i => { counts[i.type] = (counts[i.type] || 0) + 1; });
 
       const result = await calculateSimulation({
         cityId: city.id,
         interventions: Object.entries(counts).map(([type, count]) => ({
           type: type as typeof InterventionType[keyof typeof InterventionType],
-          lat: invs.find(i => i.type === type)?.lat ?? city.lat,
-          lng: invs.find(i => i.type === type)?.lng ?? city.lng,
+          lat: apiInvs.find(i => i.type === type)?.lat ?? city.lat,
+          lng: apiInvs.find(i => i.type === type)?.lng ?? city.lng,
           count,
         })),
         geoContext,
       });
-      setSimulationResult(result);
+
+      const localExtras = buildLocalExtras(city, invs, wastage, rainHarvest, geo);
+      const merged: SimulationResult = {
+        ...result,
+        temperatureDelta: result.temperatureDelta + localExtras.tempDelta,
+        groundwaterDelta: result.groundwaterDelta + localExtras.gwDelta,
+        contaminationDelta: result.contaminationDelta + localExtras.contamDelta,
+        waterWastageDelta: result.waterWastageDelta + localExtras.wasteDelta,
+        floodRiskDelta: result.floodRiskDelta + localExtras.floodDelta,
+        sewageLeakageRate: Math.max(result.sewageLeakageRate ?? 0, localExtras.sewageLeakage),
+        aiInsights: [...(localExtras.aiInsights), ...(result.aiInsights ?? [])],
+      };
+      setSimulationResult(merged);
     } catch (err) {
       console.warn('[Simulation] API failed, using local fallback:', err);
-      setSimulationResult(buildLocalResult(city, invs));
+      setSimulationResult(buildLocalResult(city, invs, wastage, rainHarvest, geo));
     } finally {
       setIsSimulating(false);
     }
@@ -206,12 +228,12 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      runSimulation(selectedCity, interventions, geoAnalysis);
+      runSimulation(selectedCity, interventions, geoAnalysis, waterWastagePercent, rainwaterHarvestingEnabled);
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [selectedCity?.id, interventions, geoAnalysis, runSimulation]);
+  }, [selectedCity?.id, interventions, geoAnalysis, waterWastagePercent, rainwaterHarvestingEnabled, runSimulation]);
 
   const selectCity = (id: string | null) => {
     setSelectedCityId(id);
@@ -248,6 +270,10 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
     setShowSmartZones(prev => !prev);
   };
 
+  const toggleRainwaterHarvesting = () => {
+    setRainwaterHarvestingEnabled(prev => !prev);
+  };
+
   const runAutoOptimize = useCallback(async (priority = 'balanced') => {
     if (!selectedCity) return;
     setAutoOptimizing(true);
@@ -276,7 +302,7 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
         const jitter2 = (Math.random() - 0.5) * 0.04;
         newInvs.push({
           id: Math.random().toString(36).substring(7),
-          type: rec.type as typeof InterventionType[keyof typeof InterventionType],
+          type: rec.type,
           lat: selectedCity.lat + jitter,
           lng: selectedCity.lng + jitter2,
         });
@@ -304,6 +330,8 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
       autoOptimizing,
       autoOptimizeResult,
       toolTab,
+      waterWastagePercent,
+      rainwaterHarvestingEnabled,
       selectCity,
       setActiveTool,
       addIntervention,
@@ -315,6 +343,8 @@ export function SandboxProvider({ children }: { children: React.ReactNode }) {
       runAutoOptimize,
       applyAutoOptimize,
       setToolTab,
+      setWaterWastagePercent,
+      toggleRainwaterHarvesting,
     }}>
       {children}
     </SandboxContext.Provider>
@@ -329,7 +359,78 @@ export function useSandbox() {
   return context;
 }
 
-function buildLocalResult(city: City, invs: LocalIntervention[]): SimulationResult {
+// Local extras: apply sewage_untreated, water wastage, and rainwater harvesting
+function buildLocalExtras(
+  city: City,
+  invs: LocalIntervention[],
+  wastagePercent: number,
+  rainHarvest: boolean,
+  geo: GeoAnalysis | null,
+): { tempDelta: number; gwDelta: number; contamDelta: number; wasteDelta: number; floodDelta: number; sewageLeakage: number; aiInsights: string[] } {
+  let gwDelta = 0, contamDelta = 0, wasteDelta = 0, floodDelta = 0, tempDelta = 0;
+  const aiInsights: string[] = [];
+
+  // Water wastage slider effect
+  const wastageNorm = wastagePercent / 100;
+  gwDelta -= wastageNorm * 8;
+  contamDelta += wastageNorm * 12;
+  floodDelta += wastageNorm * 6;
+  wasteDelta += wastagePercent * 0.3;
+  if (wastagePercent > 60) {
+    aiInsights.push(`⚠️ Warning: ${wastagePercent}% water wastage rate is critically high. Groundwater depletion accelerating — deploy Water Tanks or Permeable Pavement to reduce runoff.`);
+  } else if (wastagePercent > 30) {
+    aiInsights.push(`📊 Water wastage at ${wastagePercent}%. Moderate runoff and pollution increase detected. Consider reducing wastage below 20% for sustainable groundwater levels.`);
+  }
+
+  // Rainwater harvesting (Hyderabad ~800mm/year baseline)
+  if (rainHarvest) {
+    const rainfallMm = city.rainfall ?? 800;
+    const rechargeFactor = rainfallMm / 800;
+    gwDelta += 3.5 * rechargeFactor;
+    wasteDelta -= 18;
+    floodDelta -= 12;
+    aiInsights.push(`✅ Rainwater harvesting active. Using ${rainfallMm}mm/year local data — groundwater recharge increased by ${(3.5 * rechargeFactor).toFixed(1)}%. Flood risk reduced.`);
+  } else {
+    gwDelta -= 1.2;
+    wasteDelta += 8;
+    aiInsights.push(`💧 Rainwater harvesting is OFF. ${city.rainfall ?? 800}mm/year of rainfall is being lost to surface runoff. Enable harvesting to improve recharge.`);
+  }
+
+  // Sewage untreated sources
+  const sewageSources = invs.filter(i => i.type === 'sewage_untreated');
+  const waterBodyDistKm = geo?.nearestWaterBody?.distanceKm ?? 999;
+  const waterBodyName = geo?.nearestWaterBody?.name ?? 'nearby water body';
+
+  for (const _ of sewageSources) {
+    gwDelta -= 4;
+    contamDelta += 30;
+    floodDelta += 8;
+    tempDelta += 0.3;
+  }
+
+  if (sewageSources.length > 0) {
+    const soilType = geo?.landUseClass ?? 'Vertisol';
+    aiInsights.push(`🚨 Critical: ${sewageSources.length} untreated sewage source${sewageSources.length > 1 ? 's' : ''} detected. Contamination spreading via distance-based diffusion model (${soilType} soil absorption).`);
+
+    if (waterBodyDistKm < 3) {
+      aiInsights.push(`⚠️ Alert: Sewage contamination detected near ${waterBodyName} (${waterBodyDistKm.toFixed(1)}km away). Water body at high risk — pathogen load may cause irreversible damage. Add Sewage Treatment Plants immediately.`);
+    } else if (waterBodyDistKm < 8) {
+      aiInsights.push(`⚠️ Warning: Sewage plume may reach ${waterBodyName} (${waterBodyDistKm.toFixed(1)}km away) within 48–72 hours based on soil flow models. Recommend: Add Treatment Plant or increase filtration.`);
+    }
+
+    const sewageCount = sewageSources.length;
+    const leakageLiters = Math.round(sewageCount * city.population * 0.0015 * (1 + wastagePercent / 100));
+    aiInsights.push(`📊 Estimated sewage discharge: ${(leakageLiters / 1000).toFixed(0)}K L/day. Groundwater contamination radius: ~${(sewageCount * 1.2).toFixed(1)}km. Fix: Install STP or Permeable Pavement to filter pathogens.`);
+  }
+
+  const sewageLeakage = sewageSources.length > 0
+    ? Math.round(sewageSources.length * city.population * 0.0015 * (1 + wastagePercent / 100))
+    : 0;
+
+  return { tempDelta, gwDelta, contamDelta, wasteDelta, floodDelta, sewageLeakage, aiInsights };
+}
+
+function buildLocalResult(city: City, invs: LocalIntervention[], wastagePercent: number, rainHarvest: boolean, geo: GeoAnalysis | null): SimulationResult {
   let tempDelta = 0, gwDelta = 0, aqiDelta = 0, wasteDelta = 0, contamDelta = 0, infraDelta = 0, floodDelta = 0;
   const counts: Record<string, number> = {};
   invs.forEach(inv => {
@@ -344,11 +445,20 @@ function buildLocalResult(city: City, invs: LocalIntervention[]): SimulationResu
       case 'water_tank': wasteDelta -= 10; floodDelta -= 5; gwDelta += 0.8; break;
       case 'cool_road': tempDelta -= 0.25; break;
       case 'rainfall_harvesting': gwDelta += 2.5; wasteDelta -= 15; floodDelta -= 10; break;
+      case 'sewage_untreated': gwDelta -= 4; contamDelta += 30; floodDelta += 8; tempDelta += 0.3; break;
       case 'factory': tempDelta += 1.5; gwDelta -= 2.0; aqiDelta += 30; contamDelta += 18; break;
       case 'stubble_burning': tempDelta += 0.8; gwDelta -= 1.0; aqiDelta += 50; contamDelta += 8; break;
       case 'fireworks': tempDelta += 0.2; aqiDelta += 20; break;
     }
   });
+
+  const extras = buildLocalExtras(city, invs, wastagePercent, rainHarvest, geo);
+  tempDelta += extras.tempDelta;
+  gwDelta += extras.gwDelta;
+  contamDelta += extras.contamDelta;
+  wasteDelta += extras.wasteDelta;
+  floodDelta += extras.floodDelta;
+
   tempDelta = Math.max(-15, Math.min(15, tempDelta));
   gwDelta = Math.max(-50, Math.min(50, gwDelta));
   const riskDelta = tempDelta * 2 - gwDelta * 0.5 + aqiDelta * 0.1;
@@ -356,7 +466,7 @@ function buildLocalResult(city: City, invs: LocalIntervention[]): SimulationResu
     const tool = TOOLS.find(t => t.type === type);
     return { type, effect: tool?.name ?? type, temperatureImpact: 0, groundwaterImpact: 0, contaminationImpact: 0, waterWastageImpact: 0 };
   });
-  const sewageLeakage = Math.max(0, (city.population * 0.002) * ((city.contaminationLevel + contamDelta) / 100));
+  const sewageLeakage = extras.sewageLeakage || Math.max(0, (city.population * 0.002) * ((city.contaminationLevel + contamDelta) / 100));
   return {
     cityId: city.id,
     temperatureDelta: tempDelta,
@@ -371,7 +481,7 @@ function buildLocalResult(city: City, invs: LocalIntervention[]): SimulationResu
     infrastructureStressDelta: infraDelta,
     floodRiskDelta: floodDelta,
     sewageLeakageRate: sewageLeakage,
-    aiInsights: [`Local fallback: ${city.name} simulation running offline.`],
+    aiInsights: extras.aiInsights,
     interventionBreakdown: bd,
     geoAdjusted: false,
   } as unknown as SimulationResult;

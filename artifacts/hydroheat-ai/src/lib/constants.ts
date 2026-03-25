@@ -19,7 +19,7 @@ export const HARDCODED_CITIES: City[] = [
 ];
 
 export interface ToolDef {
-  type: typeof InterventionType[keyof typeof InterventionType];
+  type: string;
   name: string;
   icon: string;
   colorClass: string;
@@ -38,6 +38,7 @@ export const TOOLS: ToolDef[] = [
   { type: 'sewage_treatment', name: 'Sewage STP', icon: '🚰', colorClass: 'text-blue-400 border-blue-500/50', impactDesc: '-22 contamination, +1.5% GW', category: 'positive', tab: 'water' },
   { type: 'water_tank', name: 'Water Tank', icon: '🪣', colorClass: 'text-indigo-400 border-indigo-500/50', impactDesc: '-10 wastage, -5 flood risk', category: 'positive', tab: 'water' },
   { type: 'rainfall_harvesting', name: 'Harvest Rain', icon: '🌧️', colorClass: 'text-sky-400 border-sky-500/50', impactDesc: '-15 wastage, -10 flood risk', category: 'positive', tab: 'water' },
+  { type: 'sewage_untreated', name: 'Raw Sewage', icon: '🧪', colorClass: 'text-amber-600 border-amber-700/50', impactDesc: '+30 contam., -4% GW, spreads to water', category: 'negative', tab: 'harmful' },
   { type: 'factory', name: 'Factory', icon: '🏭', colorClass: 'text-red-400 border-red-500/50', impactDesc: '+1.5°C, -2% GW, +18 contam.', category: 'negative', tab: 'harmful' },
   { type: 'stubble_burning', name: 'Stubble Fire', icon: '🌾', colorClass: 'text-orange-400 border-orange-500/50', impactDesc: '+0.8°C, AQI +50, +8 contam.', category: 'negative', tab: 'harmful' },
   { type: 'fireworks', name: 'Fireworks', icon: '🎆', colorClass: 'text-rose-400 border-rose-500/50', impactDesc: '+0.2°C, AQI +20', category: 'negative', tab: 'harmful' },

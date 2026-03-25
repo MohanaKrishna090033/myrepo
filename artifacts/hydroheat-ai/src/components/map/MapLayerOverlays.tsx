@@ -34,7 +34,7 @@ export function CanvasLayerOverlay() {
 
     if (activeLayer === 'heat') {
       const temp = selectedCity.temperature;
-      const intensity = (temp - 25) / 25; // 0–1 scale (25°C = 0, 50°C = 1)
+      const intensity = (temp - 25) / 25;
       const r = Math.round(255 * Math.min(1, intensity));
       const g = Math.round(120 * Math.max(0, 1 - intensity));
       const gradient = ctx.createRadialGradient(cityPoint.x, cityPoint.y, 0, cityPoint.x, cityPoint.y, pxRadius);
@@ -65,7 +65,6 @@ export function CanvasLayerOverlay() {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, size.x, size.y);
 
-      // Sewage flow lines (radiate outward from city center)
       const leakage = simulationResult?.sewageLeakageRate ?? 0;
       if (leakage > 0) {
         const numLines = Math.min(8, Math.ceil(leakage / 5000));
@@ -186,11 +185,9 @@ export function WaterParticleSystem() {
       ctx.clearRect(0, 0, size.x, size.y);
       frameCount++;
 
-      // Spawn new particles
       if (frameCount % 3 === 0) spawnParticle();
       if (particlesRef.current.length > 80) particlesRef.current.splice(0, 5);
 
-      // Update and draw
       particlesRef.current = particlesRef.current.filter(p => p.life > 0);
       for (const p of particlesRef.current) {
         p.x += p.vx;
@@ -225,6 +222,152 @@ export function WaterParticleSystem() {
   );
 }
 
+// Animated sewage contamination spread overlay — always active when sewage sources exist
+export function SewageContaminationOverlay() {
+  const map = useMap();
+  const { interventions, waterWastagePercent } = useSandbox();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animRef = useRef<number>(0);
+
+  const sewageSources = interventions.filter(i => i.type === 'sewage_untreated');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (sewageSources.length === 0) {
+      cancelAnimationFrame(animRef.current);
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const size = map.getSize();
+    canvas.width = size.x;
+    canvas.height = size.y;
+
+    const RING_DURATION = 3200;
+    const NUM_RINGS = 5;
+    const BASE_MAX_RADIUS = 160 + waterWastagePercent * 0.8;
+
+    const animate = () => {
+      ctx.clearRect(0, 0, size.x, size.y);
+      const now = Date.now();
+
+      for (const source of sewageSources) {
+        const point = map.latLngToContainerPoint([source.lat, source.lng]);
+        const maxRadius = BASE_MAX_RADIUS;
+
+        // Static sewage gradient pool
+        const poolGrad = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, maxRadius * 0.7);
+        poolGrad.addColorStop(0, 'rgba(100, 50, 5, 0.65)');
+        poolGrad.addColorStop(0.25, 'rgba(120, 60, 5, 0.50)');
+        poolGrad.addColorStop(0.55, 'rgba(90, 45, 0, 0.28)');
+        poolGrad.addColorStop(0.8, 'rgba(60, 30, 0, 0.10)');
+        poolGrad.addColorStop(1, 'rgba(40, 20, 0, 0)');
+        ctx.fillStyle = poolGrad;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, maxRadius * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Animated expanding contamination rings
+        for (let r = 0; r < NUM_RINGS; r++) {
+          const offset = (r / NUM_RINGS) * RING_DURATION;
+          const phase = ((now - offset) % RING_DURATION) / RING_DURATION;
+          const ringRadius = maxRadius * phase;
+          const alpha = 0.75 * (1 - phase);
+
+          // Outer contamination ring
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, ringRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(160, 80, 8, ${alpha})`;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Inner brown fill that shrinks as rings expand
+          if (phase < 0.3) {
+            const innerFill = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, ringRadius);
+            innerFill.addColorStop(0, `rgba(140, 60, 0, ${0.15 * (1 - phase / 0.3)})`);
+            innerFill.addColorStop(1, 'rgba(100, 40, 0, 0)');
+            ctx.fillStyle = innerFill;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, ringRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Animated flow lines radiating outward (contamination spreading)
+        const NUM_FLOW_LINES = 8;
+        for (let i = 0; i < NUM_FLOW_LINES; i++) {
+          const angle = (i / NUM_FLOW_LINES) * Math.PI * 2;
+          const flowPhase = ((now + i * (RING_DURATION / NUM_FLOW_LINES)) % RING_DURATION) / RING_DURATION;
+          const flowDist = maxRadius * 0.85 * flowPhase;
+          const flowAlpha = 0.5 * (1 - flowPhase);
+
+          const endX = point.x + Math.cos(angle) * flowDist;
+          const endY = point.y + Math.sin(angle) * flowDist;
+
+          ctx.beginPath();
+          ctx.moveTo(point.x, point.y);
+          ctx.lineTo(endX, endY);
+          ctx.strokeStyle = `rgba(140, 65, 5, ${flowAlpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 7]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Sewage source marker (center dot)
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(180, 80, 0, 0.9)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 140, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Biohazard label
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = 'rgba(255, 160, 50, 0.9)';
+        ctx.textAlign = 'center';
+        ctx.fillText('☣ SEWAGE', point.x, point.y - 14);
+        ctx.textAlign = 'left';
+      }
+
+      animRef.current = requestAnimationFrame(animate);
+    };
+
+    animate();
+    return () => cancelAnimationFrame(animRef.current);
+  }, [sewageSources.length, map, waterWastagePercent]);
+
+  // Resize handler
+  useEffect(() => {
+    const handler = () => {
+      if (canvasRef.current) {
+        const size = map.getSize();
+        canvasRef.current.width = size.x;
+        canvasRef.current.height = size.y;
+      }
+    };
+    map.on('resize zoomend moveend', handler);
+    return () => { map.off('resize zoomend moveend', handler); };
+  }, [map]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 215, mixBlendMode: 'multiply' }}
+    />
+  );
+}
+
 // Smart zone visualization circles
 export function SmartZoneOverlay() {
   const map = useMap();
@@ -243,14 +386,12 @@ export function SmartZoneOverlay() {
 
     for (const zone of smartZones) {
       const center = map.latLngToContainerPoint([zone.lat, zone.lng]);
-      // Convert radius km to pixels approximately
       const edgePoint = map.latLngToContainerPoint([zone.lat + zone.radiusKm / 111, zone.lng]);
       const radiusPx = Math.abs(center.y - edgePoint.y);
 
       const color = ZONE_COLORS[zone.type as SmartZoneType] ?? '#ffffff';
       const opacity = zone.severity === 'critical' ? 0.35 : zone.severity === 'high' ? 0.25 : 0.18;
 
-      // Filled circle
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', String(center.x));
       circle.setAttribute('cy', String(center.y));
@@ -263,7 +404,6 @@ export function SmartZoneOverlay() {
       circle.setAttribute('stroke-dasharray', '4 3');
       svg.appendChild(circle);
 
-      // Severity pulsing ring for critical
       if (zone.severity === 'critical') {
         const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         ring.setAttribute('cx', String(center.x));
@@ -276,7 +416,6 @@ export function SmartZoneOverlay() {
         svg.appendChild(ring);
       }
 
-      // Label
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', String(center.x));
       text.setAttribute('y', String(center.y - radiusPx - 6));

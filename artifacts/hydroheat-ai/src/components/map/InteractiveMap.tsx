@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ZoomControl, useM
 import L from 'leaflet';
 import { useSandbox } from '../../context/SandboxContext';
 import { MAP_CENTER, INITIAL_ZOOM, TOOLS } from '../../lib/constants';
-import { CanvasLayerOverlay, WaterParticleSystem, SmartZoneOverlay } from './MapLayerOverlays';
+import { CanvasLayerOverlay, WaterParticleSystem, SmartZoneOverlay, SewageContaminationOverlay } from './MapLayerOverlays';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -30,11 +30,13 @@ function CityViewUpdater() {
   const map = useMap();
   const { selectedCity } = useSandbox();
   useEffect(() => {
-    if (selectedCity) {
-      map.flyTo([selectedCity.lat, selectedCity.lng], 12, { duration: 1.5 });
-    } else {
-      map.flyTo(MAP_CENTER, INITIAL_ZOOM, { duration: 1.5 });
-    }
+    try {
+      if (selectedCity && isFinite(selectedCity.lat) && isFinite(selectedCity.lng)) {
+        map.flyTo([selectedCity.lat, selectedCity.lng], 12, { duration: 1.5 });
+      } else if (!selectedCity) {
+        map.flyTo(MAP_CENTER, INITIAL_ZOOM, { duration: 1.5 });
+      }
+    } catch (_) {}
   }, [selectedCity, map]);
   return null;
 }
@@ -138,6 +140,29 @@ function MapOverlay() {
               <div className="absolute w-2 h-2 bg-yellow-300 animate-ripple rounded-full -ml-1 -mt-1 shadow-[0_0_10px_#fff]" />
             </>
           )}
+          {anim.type === 'sewage_untreated' && (
+            <>
+              {[0, 1, 2, 3].map(i => (
+                <div
+                  key={i}
+                  className="absolute rounded-full border-2"
+                  style={{
+                    width: `${(i + 1) * 30}px`,
+                    height: `${(i + 1) * 30}px`,
+                    marginLeft: `-${(i + 1) * 15}px`,
+                    marginTop: `-${(i + 1) * 15}px`,
+                    borderColor: `rgba(160, 80, 10, ${0.8 - i * 0.18})`,
+                    backgroundColor: `rgba(100, 40, 0, ${0.15 - i * 0.03})`,
+                    animation: `ripple 1.5s ease-out ${i * 0.3}s forwards`,
+                  }}
+                />
+              ))}
+              <div className="absolute text-xl animate-float" style={{ marginLeft: '-10px', marginTop: '-10px' }}>☣️</div>
+              <div className="absolute text-[10px] font-mono text-amber-500 font-bold whitespace-nowrap" style={{ top: '-30px', left: '50%', transform: 'translateX(-50%)' }}>
+                CONTAMINATION ACTIVE
+              </div>
+            </>
+          )}
           {anim.type === 'green_roof' && (
             <div className="absolute w-16 h-16 border-4 border-emerald-400/50 rounded-lg animate-ripple -ml-8 -mt-8" />
           )}
@@ -164,6 +189,7 @@ function OverlayRenderer() {
     <>
       <CanvasLayerOverlay />
       <WaterParticleSystem />
+      <SewageContaminationOverlay />
       <SmartZoneOverlay />
     </>
   );

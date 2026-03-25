@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { Trash2, MousePointerClick, Activity, Map, Layers, Radar } from 'lucide-react';
+import { Trash2, MousePointerClick, Activity, Map, Radar, Droplets, CloudRain, Gauge } from 'lucide-react';
 import { useSandbox } from '../../context/SandboxContext';
-import { TOOLS, LAYER_DEFS } from '../../lib/constants';
+import { TOOLS } from '../../lib/constants';
 
 const TAB_DEFS = [
   { id: 'green' as const, label: '🌿 Green', color: 'text-green-400 border-green-500/60 bg-green-500/10' },
@@ -12,7 +12,8 @@ const TAB_DEFS = [
 export function SandboxToolbox() {
   const {
     activeTool, setActiveTool, interventions, clearInterventions, selectedCity, simulationResult,
-    activeLayer, setActiveLayer, showSmartZones, toggleSmartZones, toolTab, setToolTab,
+    showSmartZones, toggleSmartZones, toolTab, setToolTab,
+    waterWastagePercent, setWaterWastagePercent, rainwaterHarvestingEnabled, toggleRainwaterHarvesting,
   } = useSandbox();
 
   const filteredTools = TOOLS.filter(t => t.tab === toolTab);
@@ -28,6 +29,18 @@ export function SandboxToolbox() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedCity, setActiveTool, filteredTools]);
+
+  const wastageColor = waterWastagePercent > 60
+    ? 'text-red-400'
+    : waterWastagePercent > 30
+    ? 'text-amber-400'
+    : 'text-blue-400';
+
+  const wastageTrackColor = waterWastagePercent > 60
+    ? '#f87171'
+    : waterWastagePercent > 30
+    ? '#fbbf24'
+    : '#60a5fa';
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-5xl glass-panel-glow rounded-2xl p-4 flex flex-col gap-3 transition-all">
@@ -57,8 +70,8 @@ export function SandboxToolbox() {
 
       {activeTool && selectedCity && (
         <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex items-center justify-center">
-          <span className="text-primary font-mono text-sm tracking-widest uppercase animate-pulse drop-shadow-[0_0_8px_currentColor]">
-            Click map to deploy entity
+          <span className={`font-mono text-sm tracking-widest uppercase animate-pulse drop-shadow-[0_0_8px_currentColor] ${activeTool === 'sewage_untreated' ? 'text-amber-500' : 'text-primary'}`}>
+            {activeTool === 'sewage_untreated' ? '🧪 Click map to place sewage source' : 'Click map to deploy entity'}
           </span>
         </div>
       )}
@@ -89,27 +102,64 @@ export function SandboxToolbox() {
         </div>
       </div>
 
-      {/* Layer Controls Row */}
-      <div className="flex items-center gap-2 px-2 flex-wrap">
-        <div className="flex items-center gap-1.5 mr-1">
-          <Layers className="w-3.5 h-3.5 text-white/40" />
-          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Layers:</span>
+      {/* Environment Simulation Controls */}
+      <div className="flex items-center gap-3 px-2 flex-wrap">
+        <div className="flex items-center gap-1.5 mr-1 shrink-0">
+          <Gauge className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Environment:</span>
         </div>
-        {LAYER_DEFS.map(layer => (
-          <button
-            key={layer.id}
-            onClick={() => setActiveLayer(layer.id)}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-mono transition-all ${activeLayer === layer.id ? `${layer.color} border-current shadow-[0_0_8px_currentColor]` : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'}`}
-          >
-            <span>{layer.icon}</span>
-            <span className="hidden sm:inline uppercase tracking-wider">{layer.label}</span>
-          </button>
-        ))}
-        <div className="w-px h-5 bg-white/10 mx-1" />
+
+        {/* Water Wastage Slider */}
+        <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-lg px-3 py-1.5">
+          <Droplets className="w-3 h-3 text-blue-400 shrink-0" />
+          <span className="text-[9px] font-mono text-white/50 uppercase tracking-wider shrink-0">Water Wastage</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={waterWastagePercent}
+            onChange={e => setWaterWastagePercent(Number(e.target.value))}
+            className="w-24 h-1 cursor-pointer appearance-none rounded-full outline-none"
+            style={{
+              background: `linear-gradient(to right, ${wastageTrackColor} 0%, ${wastageTrackColor} ${waterWastagePercent}%, rgba(255,255,255,0.1) ${waterWastagePercent}%, rgba(255,255,255,0.1) 100%)`,
+              accentColor: wastageTrackColor,
+            }}
+          />
+          <span className={`text-[11px] font-mono font-bold w-8 text-right shrink-0 ${wastageColor}`}>
+            {waterWastagePercent}%
+          </span>
+        </div>
+
+        <div className="w-px h-5 bg-white/10 shrink-0" />
+
+        {/* Rainwater Harvesting Toggle */}
+        <button
+          onClick={toggleRainwaterHarvesting}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-mono transition-all shrink-0 ${
+            rainwaterHarvestingEnabled
+              ? 'border-sky-500/60 text-sky-400 bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]'
+              : 'border-white/10 text-white/40 hover:border-sky-400/40 hover:text-sky-300'
+          }`}
+        >
+          <CloudRain className="w-3 h-3" />
+          <span className="uppercase tracking-wider">Rain Harvest</span>
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${rainwaterHarvestingEnabled ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-white/30'}`}>
+            {rainwaterHarvestingEnabled ? 'ON' : 'OFF'}
+          </span>
+        </button>
+
+        <div className="w-px h-5 bg-white/10 shrink-0" />
+
+        {/* Smart Zones Toggle */}
         <button
           onClick={toggleSmartZones}
           disabled={!selectedCity}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-mono transition-all ${showSmartZones ? 'border-violet-500/60 text-violet-400 bg-violet-500/10 shadow-[0_0_8px_rgba(139,92,246,0.3)]' : 'border-white/10 text-white/40 hover:border-violet-400/40 hover:text-violet-300'} disabled:opacity-30`}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono transition-all shrink-0 ${
+            showSmartZones
+              ? 'border-violet-500/60 text-violet-400 bg-violet-500/10 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
+              : 'border-white/10 text-white/40 hover:border-violet-400/40 hover:text-violet-300'
+          } disabled:opacity-30`}
         >
           <Radar className="w-3 h-3" />
           <span className="uppercase tracking-wider">Smart Zones</span>
@@ -136,6 +186,7 @@ export function SandboxToolbox() {
         {filteredTools.map((tool, idx) => {
           const isActive = activeTool === tool.type;
           const isGreen = tool.category === 'positive';
+          const isSewage = tool.type === 'sewage_untreated';
 
           return (
             <div key={tool.type} className="group relative">
@@ -147,11 +198,12 @@ export function SandboxToolbox() {
                   ${!selectedCity ? 'opacity-30 cursor-not-allowed grayscale' : 'hover:-translate-y-1 cursor-pointer'}
                   ${isActive ? 'bg-black/80 scale-105 shadow-[0_0_20px_rgba(0,0,0,0.8)] z-10' : 'bg-black/40 border-white/10 hover:bg-black/60'}
                   ${isActive && isGreen ? 'border-green-400/80 shadow-[0_0_15px_rgba(0,255,100,0.2)]' : ''}
-                  ${isActive && !isGreen ? 'border-orange-500/80 shadow-[0_0_15px_rgba(255,100,0,0.2)]' : ''}
+                  ${isActive && isSewage ? 'border-amber-600/80 shadow-[0_0_15px_rgba(180,90,10,0.3)]' : ''}
+                  ${isActive && !isGreen && !isSewage ? 'border-orange-500/80 shadow-[0_0_15px_rgba(255,100,0,0.2)]' : ''}
                 `}
                 style={{
                   background: isActive
-                    ? `radial-gradient(circle at 50% 120%, ${isGreen ? 'rgba(0,255,100,0.15)' : 'rgba(255,100,0,0.15)'}, transparent 80%), rgba(0,0,0,0.8)`
+                    ? `radial-gradient(circle at 50% 120%, ${isGreen ? 'rgba(0,255,100,0.15)' : isSewage ? 'rgba(160,80,10,0.2)' : 'rgba(255,100,0,0.15)'}, transparent 80%), rgba(0,0,0,0.8)`
                     : undefined
                 }}
               >
@@ -167,11 +219,11 @@ export function SandboxToolbox() {
                   {tool.icon}
                 </div>
 
-                <span className={`font-sans font-bold text-[10px] leading-tight text-center px-1 ${isActive ? (isGreen ? 'text-green-300' : 'text-orange-300') : 'text-white/80'}`}>
+                <span className={`font-sans font-bold text-[10px] leading-tight text-center px-1 ${isActive ? (isGreen ? 'text-green-300' : isSewage ? 'text-amber-400' : 'text-orange-300') : 'text-white/80'}`}>
                   {tool.name}
                 </span>
 
-                <div className={`absolute bottom-0 left-0 right-0 h-1 ${isGreen ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-gradient-to-r from-orange-500 to-red-500'} ${isActive ? 'opacity-100' : 'opacity-30'}`} />
+                <div className={`absolute bottom-0 left-0 right-0 h-1 ${isGreen ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : isSewage ? 'bg-gradient-to-r from-amber-800 to-yellow-700' : 'bg-gradient-to-r from-orange-500 to-red-500'} ${isActive ? 'opacity-100' : 'opacity-30'}`} />
               </button>
 
               {/* Tooltip */}
@@ -180,10 +232,15 @@ export function SandboxToolbox() {
                   <span className="text-xl">{tool.icon}</span>
                   <span className="font-bold font-sans text-sm text-white">{tool.name}</span>
                 </div>
+                {isSewage && (
+                  <div className="text-[9px] font-mono text-amber-500/80 mb-1 border border-amber-700/30 rounded px-1.5 py-0.5 bg-amber-900/20">
+                    ⚠ Places contamination source on map
+                  </div>
+                )}
                 <div className="font-mono text-xs mt-2 text-white/70">
                   <div className="flex items-start gap-1">
                     <span className="text-white/40 mt-0.5">↳</span>
-                    <span className={isGreen ? 'text-green-300' : 'text-red-300'}>{tool.impactDesc}</span>
+                    <span className={isGreen ? 'text-green-300' : isSewage ? 'text-amber-400' : 'text-red-300'}>{tool.impactDesc}</span>
                   </div>
                 </div>
                 <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-black/95 border-b border-r border-primary/30 rotate-45" />
