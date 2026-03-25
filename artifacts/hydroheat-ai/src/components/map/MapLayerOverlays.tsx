@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useMap } from 'react-leaflet';
-import { Circle, Tooltip } from 'react-leaflet';
+import { useMap, Circle, Tooltip } from 'react-leaflet';
 import { useSandbox } from '../../context/SandboxContext';
 import type { SmartZoneType } from '../../lib/constants';
 

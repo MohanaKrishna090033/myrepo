@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 name = "web"
 paths = [ "/" ]
-localPort = 5180
+localPort = 24734
 
 [services.development]
 run = "pnpm --filter @workspace/hydroheat-ai run dev"
@@ -27,5 +27,5 @@ from = "/*"
 to = "/index.html"
 
 [services.env]
-PORT = "5180"
+PORT = "24734"
 BASE_PATH = "/"
