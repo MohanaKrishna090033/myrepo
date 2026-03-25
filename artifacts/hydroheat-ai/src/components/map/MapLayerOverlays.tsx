@@ -1,13 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
+import { Circle, Tooltip } from 'react-leaflet';
 import { useSandbox } from '../../context/SandboxContext';
-import { ZONE_COLORS, type SmartZoneType } from '../../lib/constants';
+import type { SmartZoneType } from '../../lib/constants';
 
 // Canvas-based heat / overlay renderer
 export function CanvasLayerOverlay() {
   const map = useMap();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { selectedCity, activeLayer, simulationResult } = useSandbox();
+  const { selectedCity, activeLayer, simulationResult, interventions } = useSandbox();
+
+  const sewageSources = interventions.filter(i => i.type === 'sewage_untreated');
 
   useEffect(() => {
     if (!selectedCity || activeLayer === 'none') {
@@ -97,12 +100,45 @@ export function CanvasLayerOverlay() {
 
     if (activeLayer === 'water') {
       const gw = selectedCity.groundwater / 100;
-      const gradient = ctx.createRadialGradient(cityPoint.x, cityPoint.y, 0, cityPoint.x, cityPoint.y, pxRadius);
-      gradient.addColorStop(0, `rgba(0, 120, 255, ${0.4 * gw})`);
-      gradient.addColorStop(0.5, `rgba(0, 80, 200, ${0.25 * gw})`);
-      gradient.addColorStop(1, 'rgba(0, 50, 150, 0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, size.x, size.y);
+      const contamFactor = sewageSources.length > 0
+        ? Math.min(1, sewageSources.length * 0.4)
+        : 0;
+
+      if (contamFactor === 0) {
+        // Clean water — blue gradient
+        const gradient = ctx.createRadialGradient(cityPoint.x, cityPoint.y, 0, cityPoint.x, cityPoint.y, pxRadius);
+        gradient.addColorStop(0, `rgba(0, 120, 255, ${0.4 * gw})`);
+        gradient.addColorStop(0.5, `rgba(0, 80, 200, ${0.25 * gw})`);
+        gradient.addColorStop(1, 'rgba(0, 50, 150, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size.x, size.y);
+      } else {
+        // Contaminated — shift from blue toward brown/red
+        const cleanAlpha = Math.max(0, 1 - contamFactor);
+        const contamAlpha = contamFactor;
+
+        const cleanGrad = ctx.createRadialGradient(cityPoint.x, cityPoint.y, 0, cityPoint.x, cityPoint.y, pxRadius);
+        cleanGrad.addColorStop(0, `rgba(0, 120, 255, ${0.4 * gw * cleanAlpha})`);
+        cleanGrad.addColorStop(0.5, `rgba(0, 80, 200, ${0.25 * gw * cleanAlpha})`);
+        cleanGrad.addColorStop(1, 'rgba(0, 50, 150, 0)');
+        ctx.fillStyle = cleanGrad;
+        ctx.fillRect(0, 0, size.x, size.y);
+
+        const contamGrad = ctx.createRadialGradient(cityPoint.x, cityPoint.y, 0, cityPoint.x, cityPoint.y, pxRadius);
+        contamGrad.addColorStop(0, `rgba(160, 60, 0, ${0.55 * contamAlpha})`);
+        contamGrad.addColorStop(0.35, `rgba(180, 80, 10, ${0.4 * contamAlpha})`);
+        contamGrad.addColorStop(0.7, `rgba(120, 40, 0, ${0.2 * contamAlpha})`);
+        contamGrad.addColorStop(1, 'rgba(80, 20, 0, 0)');
+        ctx.fillStyle = contamGrad;
+        ctx.fillRect(0, 0, size.x, size.y);
+
+        // Water contamination label
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = 'rgba(255, 100, 50, 0.85)';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠ WATER CONTAMINATED', cityPoint.x, cityPoint.y - 20);
+        ctx.textAlign = 'left';
+      }
     }
 
     if (activeLayer === 'flood') {
@@ -114,7 +150,7 @@ export function CanvasLayerOverlay() {
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, size.x, size.y);
     }
-  }, [selectedCity, activeLayer, simulationResult, map]);
+  }, [selectedCity, activeLayer, simulationResult, interventions, map, sewageSources.length]);
 
   useEffect(() => {
     const handler = () => {
@@ -225,11 +261,14 @@ export function WaterParticleSystem() {
 // Animated sewage contamination spread overlay — always active when sewage sources exist
 export function SewageContaminationOverlay() {
   const map = useMap();
-  const { interventions, waterWastagePercent } = useSandbox();
+  const { interventions, waterWastagePercent, geoAnalysis } = useSandbox();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animRef = useRef<number>(0);
 
   const sewageSources = interventions.filter(i => i.type === 'sewage_untreated');
+  const waterBodyDistKm = geoAnalysis?.nearestWaterBody?.distanceKm ?? 999;
+  const waterBodyName = geoAnalysis?.nearestWaterBody?.name ?? 'nearby water body';
+  const waterBodyIsClose = waterBodyDistKm < 6;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -280,14 +319,12 @@ export function SewageContaminationOverlay() {
           const ringRadius = maxRadius * phase;
           const alpha = 0.75 * (1 - phase);
 
-          // Outer contamination ring
           ctx.beginPath();
           ctx.arc(point.x, point.y, ringRadius, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(160, 80, 8, ${alpha})`;
           ctx.lineWidth = 2.5;
           ctx.stroke();
 
-          // Inner brown fill that shrinks as rings expand
           if (phase < 0.3) {
             const innerFill = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, ringRadius);
             innerFill.addColorStop(0, `rgba(140, 60, 0, ${0.15 * (1 - phase / 0.3)})`);
@@ -299,7 +336,7 @@ export function SewageContaminationOverlay() {
           }
         }
 
-        // Animated flow lines radiating outward (contamination spreading)
+        // Animated flow lines radiating outward
         const NUM_FLOW_LINES = 8;
         for (let i = 0; i < NUM_FLOW_LINES; i++) {
           const angle = (i / NUM_FLOW_LINES) * Math.PI * 2;
@@ -320,7 +357,28 @@ export function SewageContaminationOverlay() {
           ctx.setLineDash([]);
         }
 
-        // Sewage source marker (center dot)
+        // Water body contamination warning — directional pulse if close
+        if (waterBodyIsClose) {
+          const threatPhase = ((now * 0.5) % RING_DURATION) / RING_DURATION;
+          const threatRadius = maxRadius * 1.4 * threatPhase;
+          const threatAlpha = 0.6 * (1 - threatPhase);
+
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, threatRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(220, 40, 10, ${threatAlpha})`;
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // Water body alert label
+          const labelY = point.y - maxRadius - 22;
+          ctx.font = 'bold 11px monospace';
+          ctx.fillStyle = 'rgba(255, 80, 30, 0.95)';
+          ctx.textAlign = 'center';
+          ctx.fillText(`⚠ ${waterBodyName} AT RISK (${waterBodyDistKm.toFixed(1)}km)`, point.x, labelY);
+          ctx.textAlign = 'left';
+        }
+
+        // Sewage source marker
         ctx.beginPath();
         ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(180, 80, 0, 0.9)';
@@ -331,7 +389,6 @@ export function SewageContaminationOverlay() {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Biohazard label
         ctx.font = 'bold 11px monospace';
         ctx.fillStyle = 'rgba(255, 160, 50, 0.9)';
         ctx.textAlign = 'center';
@@ -344,9 +401,8 @@ export function SewageContaminationOverlay() {
 
     animate();
     return () => cancelAnimationFrame(animRef.current);
-  }, [sewageSources.length, map, waterWastagePercent]);
+  }, [sewageSources.length, map, waterWastagePercent, waterBodyIsClose, waterBodyDistKm, waterBodyName]);
 
-  // Resize handler
   useEffect(() => {
     const handler = () => {
       if (canvasRef.current) {
@@ -368,86 +424,85 @@ export function SewageContaminationOverlay() {
   );
 }
 
-// Smart zone visualization circles
+// Smart zone severity → color
+const SEVERITY_COLOR: Record<string, string> = {
+  critical: '#ef4444',
+  high: '#f97316',
+  moderate: '#eab308',
+  low: '#22c55e',
+};
+
+const SEVERITY_BADGE: Record<string, string> = {
+  critical: '🔴',
+  high: '🟠',
+  moderate: '🟡',
+  low: '🟢',
+};
+
+const ZONE_SHORT_LABEL: Record<string, string> = {
+  high_skyscraper_density: 'High density + canyon effect → cool roofs + street trees',
+  heat_island: 'High heat + low vegetation → green roofs + trees + reflective surfaces',
+  low_vegetation: 'Low NDVI → mass plantation + urban forest corridors',
+  sewage_risk: 'Poor sewage health → install treatment plants + permeable pavement',
+  flood_zone: 'High runoff + flood risk → rainwater harvesting + permeable pavements',
+  industrial_zone: 'Industrial pollution + high AQI → green buffer belt + solar panels',
+};
+
+// Smart zone visualization using react-leaflet circles with hover tooltips
 export function SmartZoneOverlay() {
-  const map = useMap();
   const { showSmartZones, smartZones } = useSandbox();
-  const svgRef = useRef<SVGSVGElement | null>(null);
 
-  useEffect(() => {
-    if (!showSmartZones || !svgRef.current) return;
-
-    const svg = svgRef.current;
-    svg.innerHTML = '';
-
-    const size = map.getSize();
-    svg.setAttribute('width', String(size.x));
-    svg.setAttribute('height', String(size.y));
-
-    for (const zone of smartZones) {
-      const center = map.latLngToContainerPoint([zone.lat, zone.lng]);
-      const edgePoint = map.latLngToContainerPoint([zone.lat + zone.radiusKm / 111, zone.lng]);
-      const radiusPx = Math.abs(center.y - edgePoint.y);
-
-      const color = ZONE_COLORS[zone.type as SmartZoneType] ?? '#ffffff';
-      const opacity = zone.severity === 'critical' ? 0.35 : zone.severity === 'high' ? 0.25 : 0.18;
-
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', String(center.x));
-      circle.setAttribute('cy', String(center.y));
-      circle.setAttribute('r', String(radiusPx));
-      circle.setAttribute('fill', color);
-      circle.setAttribute('fill-opacity', String(opacity));
-      circle.setAttribute('stroke', color);
-      circle.setAttribute('stroke-width', '1.5');
-      circle.setAttribute('stroke-opacity', '0.7');
-      circle.setAttribute('stroke-dasharray', '4 3');
-      svg.appendChild(circle);
-
-      if (zone.severity === 'critical') {
-        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        ring.setAttribute('cx', String(center.x));
-        ring.setAttribute('cy', String(center.y));
-        ring.setAttribute('r', String(radiusPx * 1.1));
-        ring.setAttribute('fill', 'none');
-        ring.setAttribute('stroke', color);
-        ring.setAttribute('stroke-width', '2');
-        ring.setAttribute('stroke-opacity', '0.4');
-        svg.appendChild(ring);
-      }
-
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', String(center.x));
-      text.setAttribute('y', String(center.y - radiusPx - 6));
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('fill', color);
-      text.setAttribute('font-size', '10');
-      text.setAttribute('font-family', 'monospace');
-      text.setAttribute('font-weight', 'bold');
-      text.textContent = zone.name.split(' — ')[1] ?? zone.name;
-      svg.appendChild(text);
-    }
-  }, [showSmartZones, smartZones, map]);
-
-  useEffect(() => {
-    const handler = () => {
-      if (svgRef.current) {
-        const size = map.getSize();
-        svgRef.current.setAttribute('width', String(size.x));
-        svgRef.current.setAttribute('height', String(size.y));
-      }
-    };
-    map.on('moveend zoomend resize', handler);
-    return () => { map.off('moveend zoomend resize', handler); };
-  }, [map]);
-
-  if (!showSmartZones) return null;
+  if (!showSmartZones || smartZones.length === 0) return null;
 
   return (
-    <svg
-      ref={svgRef}
-      className="absolute inset-0 pointer-events-none"
-      style={{ zIndex: 220 }}
-    />
+    <>
+      {smartZones.map(zone => {
+        const color = SEVERITY_COLOR[zone.severity] ?? '#ffffff';
+        const badge = SEVERITY_BADGE[zone.severity] ?? '⚪';
+        const shortLabel = ZONE_SHORT_LABEL[zone.type as SmartZoneType] ?? zone.insight.slice(0, 80);
+        const fillOpacity = zone.severity === 'critical' ? 0.22 : zone.severity === 'high' ? 0.16 : 0.11;
+
+        return (
+          <Circle
+            key={zone.id}
+            center={[zone.lat, zone.lng]}
+            radius={zone.radiusKm * 1000}
+            pathOptions={{
+              color,
+              fillColor: color,
+              fillOpacity,
+              weight: zone.severity === 'critical' ? 2.5 : 1.5,
+              opacity: 0.8,
+              dashArray: '6 4',
+            }}
+          >
+            <Tooltip
+              sticky
+              className="smart-zone-tooltip"
+              offset={[10, 0]}
+            >
+              <div style={{ fontFamily: 'monospace', minWidth: 220, maxWidth: 280 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6 }}>
+                  <span style={{ fontSize: 16 }}>{badge}</span>
+                  <span style={{ fontWeight: 'bold', fontSize: 12, color }}>{zone.name.split(' — ')[1] ?? zone.name}</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#d1d5db', marginBottom: 6, lineHeight: 1.5 }}>
+                  {shortLabel}
+                </div>
+                {zone.recommendations.slice(0, 2).map((r, i) => (
+                  <div key={i} style={{ fontSize: 10, color: '#9ca3af', display: 'flex', gap: 4, marginTop: 3 }}>
+                    <span style={{ color }}>→</span>
+                    <span>{r}</span>
+                  </div>
+                ))}
+                <div style={{ marginTop: 6, paddingTop: 5, borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 10, color: '#6b7280', fontStyle: 'italic' }}>
+                  Severity: <span style={{ color, fontWeight: 'bold', textTransform: 'uppercase' }}>{zone.severity}</span> · {zone.radiusKm}km radius
+                </div>
+              </div>
+            </Tooltip>
+          </Circle>
+        );
+      })}
+    </>
   );
 }

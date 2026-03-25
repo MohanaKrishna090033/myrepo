@@ -277,3 +277,20 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* Smart Zone Tooltip — dark cyberpunk style */
+.leaflet-tooltip.smart-zone-tooltip {
+  background: rgba(5, 8, 20, 0.97) !important;
+  border: 1px solid rgba(0, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.1), 0 4px 24px rgba(0, 0, 0, 0.8) !important;
+  color: #e2e8f0 !important;
+  padding: 10px 12px !important;
+  font-family: var(--font-mono) !important;
+  backdrop-filter: blur(8px) !important;
+  max-width: 300px !important;
+  pointer-events: none !important;
+}
+.leaflet-tooltip.smart-zone-tooltip::before {
+  display: none !important;
+}

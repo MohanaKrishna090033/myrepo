@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trash2, MousePointerClick, Activity, Map, Radar, Droplets, CloudRain, Gauge } from 'lucide-react';
 import { useSandbox } from '../../context/SandboxContext';
 import { TOOLS } from '../../lib/constants';
@@ -9,12 +9,72 @@ const TAB_DEFS = [
   { id: 'harmful' as const, label: '🏭 Harmful', color: 'text-red-400 border-red-500/60 bg-red-500/10' },
 ];
 
+function RainwaterImpactPanel({ enabled, rainfall }: { enabled: boolean; rainfall: number }) {
+  const rechargeFactor = rainfall / 800;
+  const gwBoost = (3.5 * rechargeFactor).toFixed(1);
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-3 py-1.5 rounded-lg border text-[10px] font-mono transition-all duration-300 ${
+        enabled
+          ? 'border-sky-500/40 bg-sky-500/8'
+          : 'border-white/10 bg-white/5'
+      }`}
+    >
+      {enabled ? (
+        <>
+          <span className="flex items-center gap-1 text-sky-300">
+            <span className="text-sky-400 font-bold">💧</span>
+            <span>GW</span>
+            <span className="text-green-400 font-bold">↑ +{gwBoost}%</span>
+          </span>
+          <span className="w-px h-3 bg-white/15" />
+          <span className="flex items-center gap-1 text-sky-300">
+            <span className="text-blue-400 font-bold">🌊</span>
+            <span>Runoff</span>
+            <span className="text-green-400 font-bold">↓ −12</span>
+          </span>
+          <span className="w-px h-3 bg-white/15" />
+          <span className="flex items-center gap-1 text-sky-300">
+            <span className="text-cyan-400 font-bold">💦</span>
+            <span>Wastage</span>
+            <span className="text-green-400 font-bold">↓ −18</span>
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="flex items-center gap-1 text-white/40">
+            <span>💧</span>
+            <span>GW</span>
+            <span className="text-red-400 font-bold">↓ −1.2%</span>
+          </span>
+          <span className="w-px h-3 bg-white/15" />
+          <span className="flex items-center gap-1 text-white/40">
+            <span>🌊</span>
+            <span>Runoff</span>
+            <span className="text-red-400 font-bold">↑ +8</span>
+          </span>
+          <span className="w-px h-3 bg-white/15" />
+          <span className="flex items-center gap-1 text-white/40">
+            <span>💦</span>
+            <span>Wastage</span>
+            <span className="text-red-400 font-bold">↑ +8</span>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SandboxToolbox() {
   const {
     activeTool, setActiveTool, interventions, clearInterventions, selectedCity, simulationResult,
     showSmartZones, toggleSmartZones, toolTab, setToolTab,
     waterWastagePercent, setWaterWastagePercent, rainwaterHarvestingEnabled, toggleRainwaterHarvesting,
   } = useSandbox();
+
+  const [showRainImpact, setShowRainImpact] = useState(false);
+  const rainImpactTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const filteredTools = TOOLS.filter(t => t.tab === toolTab);
 
@@ -30,6 +90,13 @@ export function SandboxToolbox() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedCity, setActiveTool, filteredTools]);
 
+  const handleRainwaterToggle = () => {
+    toggleRainwaterHarvesting();
+    setShowRainImpact(true);
+    if (rainImpactTimeoutRef.current) clearTimeout(rainImpactTimeoutRef.current);
+    rainImpactTimeoutRef.current = setTimeout(() => setShowRainImpact(false), 5000);
+  };
+
   const wastageColor = waterWastagePercent > 60
     ? 'text-red-400'
     : waterWastagePercent > 30
@@ -41,6 +108,8 @@ export function SandboxToolbox() {
     : waterWastagePercent > 30
     ? '#fbbf24'
     : '#60a5fa';
+
+  const cityRainfall = selectedCity?.rainfall ?? 800;
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-5xl glass-panel-glow rounded-2xl p-4 flex flex-col gap-3 transition-all">
@@ -135,7 +204,7 @@ export function SandboxToolbox() {
 
         {/* Rainwater Harvesting Toggle */}
         <button
-          onClick={toggleRainwaterHarvesting}
+          onClick={handleRainwaterToggle}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-mono transition-all shrink-0 ${
             rainwaterHarvestingEnabled
               ? 'border-sky-500/60 text-sky-400 bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]'
@@ -148,6 +217,11 @@ export function SandboxToolbox() {
             {rainwaterHarvestingEnabled ? 'ON' : 'OFF'}
           </span>
         </button>
+
+        {/* Rainwater impact panel — always visible when city selected */}
+        {selectedCity && (
+          <RainwaterImpactPanel enabled={rainwaterHarvestingEnabled} rainfall={cityRainfall} />
+        )}
 
         <div className="w-px h-5 bg-white/10 shrink-0" />
 
